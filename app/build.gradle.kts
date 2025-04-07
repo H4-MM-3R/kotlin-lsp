@@ -10,7 +10,6 @@ val analysisApiVersion = "2.2.0-dev-7826"
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    id("com.google.devtools.ksp") version "2.1.0-1.0.29"
     application
 }
 
@@ -25,7 +24,6 @@ repositories {
 
 dependencies {
 
-    // Add 
     implementation("org.jetbrains.kotlin:kotlin-compiler:$analysisApiVersion")
     implementation("org.eclipse.lsp4j:org.eclipse.lsp4j:0.24.0")
      listOf(
@@ -41,22 +39,15 @@ dependencies {
         implementation("$it:$analysisApiVersion") { isTransitive = false }
     }
 
-    implementation(project(":lsp-processor"))
-
-    // TODO: implement KSP Processor for LSP
-    // ksp(project(":lsp-processor"))
-
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation(libs.junit.jupiter.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 application {
-    // Define the main class for the application.
     mainClass = "org.kotlinLsp.MainKt"
 }
 
 tasks.named<Test>("test") {
-    // Use JUnit Platform for unit tests.
     useJUnitPlatform()
 }
