@@ -12,4 +12,3 @@ plugins {
 
 rootProject.name = "kotlin-lsp"
 include("app")
-include("lsp-processor")
