@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Set JVM options to disable extension loading and improve memory usage
+export JAVA_OPTS="-Didea.ignore.disabled.plugins=true \
+-Didea.plugins.path=dummy-plugins-path \
+-Didea.use.native.fs.for.win=false \
+-Didea.classpath.index.enabled=false \
+-Dide.no.platform.classload=true \
+-XX:+UseG1GC \
+-Xmx1024m"
+
+# Run the LSP server with debug options
+"$HOME/git-repos/kotlin-lsp/app/build/install/app/bin/app" 

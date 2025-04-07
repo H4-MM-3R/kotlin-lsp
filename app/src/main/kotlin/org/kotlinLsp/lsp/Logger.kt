@@ -29,4 +29,8 @@ object Logger {
     fun severe(message: String) {
         log("SEVERE", message)
     }
+    
+    fun error(message: String) {
+        log("ERROR", message)
+    }
 } 
