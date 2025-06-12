@@ -150,6 +150,26 @@ private fun KaSession.analyzeDeclaration(path: String, dcl: KtDeclaration): Decl
             )
         }
 
+        is KtPrimaryConstructor -> {
+            val clazz = dcl.parentOfType<KtClass>() ?: return null
+            val constructorName = clazz.name ?: return null
+            
+            Declaration.Constructor(
+                constructorName,
+                clazz.fqName?.asString() ?: "",
+                path,
+                startOffset,
+                endOffset,
+                dcl.valueParameters.map {
+                    Declaration.Constructor.Parameter(
+                        it.nameAsSafeName.asString(),
+                        it.returnType.toString()
+                    )
+                },
+                clazz.fqName?.asString() ?: ""
+            )
+        }
+
         else -> {
             // TODO Handle other declarations
             warn("Declaration type not handled: ${dcl::class.simpleName}")

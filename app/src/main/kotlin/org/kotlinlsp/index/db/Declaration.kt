@@ -73,6 +73,24 @@ sealed class Declaration() {
         val type: String,
         val parentFqName: String,
     ) : Declaration()
+
+    @Serializable
+    @SerialName("constructor")
+    data class Constructor(
+        override val name: String,
+        val fqName: String,
+        override val file: String,
+        override val startOffset: Int,
+        override val endOffset: Int,
+        val parameters: List<Parameter>,
+        val parentFqName: String,
+    ) : Declaration() {
+        @Serializable
+        data class Parameter(
+            val name: String,
+            val type: String,
+        )
+    }
 }
 
 fun Declaration.id() = "${name}:${file}:${startOffset}:${endOffset}"
