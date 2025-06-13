@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.actions.autocomplete.autocompleteAction
 import org.kotlinlsp.actions.goToDefinitionAction
+import org.kotlinlsp.actions.goToImplementationAction
 import org.kotlinlsp.actions.hoverAction
 import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.analysis.registration.Registrar
@@ -276,6 +277,11 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     fun goToDefinition(path: String, position: Position): Location? {
         val ktFile = index.getOpenedKtFile(path) ?: return null
         return project.read { goToDefinitionAction(ktFile, position) }
+    }
+
+    fun goToImplementation(path: String, position: Position): List<Location>? {
+        val ktFile = index.getOpenedKtFile(path) ?: return null
+        return project.read { goToImplementationAction(ktFile, position) }
     }
 
     fun autocomplete(path: String, position: Position): List<CompletionItem> {
