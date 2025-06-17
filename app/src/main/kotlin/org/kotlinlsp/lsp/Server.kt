@@ -61,6 +61,7 @@ class KotlinLanguageServer(
             definitionProvider = Either.forLeft(true)
             completionProvider = CompletionOptions(false, listOf("."))
             implementationProvider = Either.forLeft(true)
+            codeActionProvider = Either.forLeft(true)
         }
         val serverInfo = ServerInfo().apply {
             name = "kotlin-lsp"
@@ -161,5 +162,14 @@ class KotlinLanguageServer(
         val locations =
             analysisSession.goToImplementation(params.textDocument.uri, params.position) ?: return completedFuture(null)
         return completedFuture(Either.forLeft(locations))
+    }
+
+    override fun codeAction(params: CodeActionParams): CompletableFuture<List<Either<Command, CodeAction>>> {
+        val actions = analysisSession.getCodeActions(
+            params.textDocument.uri,
+            params.range,
+            params.context.diagnostics
+        )
+        return completedFuture(actions.map { Either.forRight(it)})
     }
 }

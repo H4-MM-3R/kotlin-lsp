@@ -38,6 +38,8 @@ import org.jetbrains.kotlin.cli.jvm.modules.JavaModuleGraph
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.actions.autocomplete.autocompleteAction
+import org.kotlinlsp.actions.codeaction.CodeActionContext
+import org.kotlinlsp.actions.codeaction.CodeActionRegistry
 import org.kotlinlsp.actions.goToDefinitionAction
 import org.kotlinlsp.actions.goToImplementationAction
 import org.kotlinlsp.actions.hoverAction
@@ -69,6 +71,7 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     private val psiDocumentManager: PsiDocumentManager
     private val buildSystemResolver: BuildSystemResolver
     private val index: Index
+    private val codeActionRegistry: CodeActionRegistry
 
     init {
         System.setProperty("java.awt.headless", "true")
@@ -97,6 +100,9 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
 
         // Create the index
         index = Index(modules, project, rootPath, notifier)
+
+        // Initialize code action registry
+        codeActionRegistry = CodeActionRegistry.createDefault()
 
         // Prepare the dependencies index for the Analysis API
         project.setupHighestLanguageLevel()
@@ -289,5 +295,14 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
         val offset = position.toOffset(ktFile)
 
         return project.read { autocompleteAction(ktFile, offset, index) }.toList()
+    }
+
+    fun getCodeActions(path: String, range: Range, diagnostics: List<Diagnostic>): List<CodeAction> {
+        val ktFile = index.getOpenedKtFile(path) ?: return emptyList()
+
+        return project.read {
+            val context = CodeActionContext(ktFile, range, diagnostics, path)
+            codeActionRegistry.getCodeActions(context)
+        }
     }
 }

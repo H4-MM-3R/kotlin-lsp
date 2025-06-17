@@ -34,3 +34,10 @@ fun getElementRange(ktFile: KtFile, element: KtElement): Range {
     }
     return Range(start, end)
 }
+
+fun Int.toLspPosition(ktFile: KtFile): Position {
+    var lineColumn = StringUtil.offsetToLineColumn(ktFile.text, this)
+    return Position(lineColumn.line, lineColumn.column)
+}
+
+fun Int.toOffset(ktFile: KtFile): Int = this
