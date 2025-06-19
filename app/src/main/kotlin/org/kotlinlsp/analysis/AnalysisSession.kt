@@ -213,7 +213,8 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
                     it.textRange.toLspRange(ktFile),
                     it.errorDescription,
                     DiagnosticSeverity.Error,
-                    "Kotlin LSP"
+                    "Kotlin LSP",
+                    "SYNTAX"
                 )
             }
         }
@@ -226,7 +227,8 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
                         it.textRanges.first().toLspRange(ktFile),
                         it.defaultMessage,
                         it.severity.toLspSeverity(),
-                        "Kotlin LSP"
+                        "Kotlin LSP",
+                        it.factoryName
                     )
                 }
 
@@ -301,7 +303,7 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
         val ktFile = index.getOpenedKtFile(path) ?: return emptyList()
 
         return project.read {
-            val context = CodeActionContext(ktFile, range, diagnostics, path)
+            val context = CodeActionContext(ktFile, range, diagnostics, path, index)
             codeActionRegistry.getCodeActions(context)
         }
     }

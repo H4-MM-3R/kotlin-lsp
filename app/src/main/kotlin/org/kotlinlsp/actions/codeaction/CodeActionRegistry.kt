@@ -38,8 +38,8 @@ class CodeActionRegistry {
             val registry = CodeActionRegistry()
             
             // Register default providers here as they are implemented
-            registry.registerProvider(org.kotlinlsp.actions.codeaction.providers.AddTodoCommentFactory())
-            // registry.registerProvider(AddImportCodeActionFactory())
+            // registry.registerProvider(org.kotlinlsp.actions.codeaction.providers.AddTodoCommentFactory())
+            registry.registerProvider(org.kotlinlsp.actions.codeaction.providers.AddImportFactory())
             // registry.registerProvider(AddReturnExpressionFactory())
             
             return registry
