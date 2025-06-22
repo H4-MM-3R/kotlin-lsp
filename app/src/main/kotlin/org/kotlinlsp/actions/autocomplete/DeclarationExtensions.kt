@@ -19,6 +19,7 @@ fun Declaration.completionKind(): CompletionItemKind =
         is Declaration.Function -> CompletionItemKind.Function
         is Declaration.Field -> CompletionItemKind.Field
         is Declaration.Constructor -> CompletionItemKind.Constructor
+        is Declaration.TypeParameter -> CompletionItemKind.TypeParameter
     }
 
 fun Declaration.details(): CompletionItemLabelDetails = when (this) {
@@ -37,6 +38,9 @@ fun Declaration.details(): CompletionItemLabelDetails = when (this) {
     is Declaration.Constructor -> CompletionItemLabelDetails().apply {
         detail = "(${parameters.joinToString(", ") { param -> "${param.name}: ${param.type}" }}) (${fqName})"
     }
+    is Declaration.TypeParameter -> CompletionItemLabelDetails().apply {
+        detail = "<${name}> (${parentFqName})"
+    }
 }
 
 fun Declaration.insertInfo(): Pair<String, InsertTextFormat> = when (this) {
@@ -50,6 +54,7 @@ fun Declaration.insertInfo(): Pair<String, InsertTextFormat> = when (this) {
     is Declaration.Constructor -> "${name}(${
         parameters.mapIndexed { index, param -> "\${${index + 1}:${param.name}}" }.joinToString(", ")
     })" to InsertTextFormat.Snippet
+    is Declaration.TypeParameter -> name to InsertTextFormat.PlainText
 }
 
 fun Sequence<Declaration>.filterMatchesReceiver(receiver: String): Sequence<Declaration> =
@@ -60,5 +65,6 @@ fun Sequence<Declaration>.filterMatchesReceiver(receiver: String): Sequence<Decl
             is Declaration.EnumEntry -> true
             is Declaration.Field -> it.parentFqName == receiver || it.parentFqName.isEmpty()
             is Declaration.Constructor -> it.parentFqName == receiver || it.parentFqName.isEmpty()
+            is Declaration.TypeParameter -> true
         }
     }

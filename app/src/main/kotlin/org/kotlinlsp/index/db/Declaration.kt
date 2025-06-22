@@ -91,6 +91,16 @@ sealed class Declaration() {
             val type: String,
         )
     }
+
+    @Serializable
+    @SerialName("typeParameter")
+    data class TypeParameter(
+        override val name: String,
+        override val file: String,
+        override val startOffset: Int,
+        override val endOffset: Int,
+        val parentFqName: String,
+    ) : Declaration()
 }
 
 fun Declaration.id() = "${name}:${file}:${startOffset}:${endOffset}"
