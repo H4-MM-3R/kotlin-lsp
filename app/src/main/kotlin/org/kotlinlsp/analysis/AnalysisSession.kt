@@ -40,6 +40,7 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.actions.autocomplete.autocompleteAction
 import org.kotlinlsp.actions.codeaction.CodeActionContext
 import org.kotlinlsp.actions.codeaction.CodeActionRegistry
+import org.kotlinlsp.actions.findReferencesAction
 import org.kotlinlsp.actions.goToDefinitionAction
 import org.kotlinlsp.actions.goToImplementationAction
 import org.kotlinlsp.actions.hoverAction
@@ -306,5 +307,10 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
             val context = CodeActionContext(ktFile, range, diagnostics, path, index)
             codeActionRegistry.getCodeActions(context)
         }
+    }
+
+    fun findReferences(path: String, position: Position): List<Location>? {
+        val ktFile = index.getOpenedKtFile(path) ?: return null
+        return project.read { findReferencesAction(ktFile, position, index) }
     }
 }

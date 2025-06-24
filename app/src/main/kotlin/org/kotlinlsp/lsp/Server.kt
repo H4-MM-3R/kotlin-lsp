@@ -62,6 +62,7 @@ class KotlinLanguageServer(
             completionProvider = CompletionOptions(false, listOf("."))
             implementationProvider = Either.forLeft(true)
             codeActionProvider = Either.forLeft(true)
+            referencesProvider = Either.forLeft(true)
         }
         val serverInfo = ServerInfo().apply {
             name = "kotlin-lsp"
@@ -171,5 +172,10 @@ class KotlinLanguageServer(
             params.context.diagnostics
         )
         return completedFuture(actions.map { Either.forRight(it)})
+    }
+
+    override fun references(params: ReferenceParams): CompletableFuture<List<Location>?> {
+        val locations = analysisSession.findReferences(params.textDocument.uri, params.position)
+        return completedFuture(locations)
     }
 }

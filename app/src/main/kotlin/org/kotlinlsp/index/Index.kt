@@ -6,6 +6,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
 import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.analysis.modules.Module
+import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.common.read
 import org.kotlinlsp.index.db.Database
 import org.kotlinlsp.index.worker.WorkerThread
@@ -18,7 +19,7 @@ interface IndexNotifier {
 }
 
 class Index(
-    modules: List<Module>,
+    private val modules: List<Module>,
     private val project: Project,
     rootFolder: String,
     notifier: IndexNotifier
@@ -98,5 +99,13 @@ class Index(
         val ktFile = project.read { PsiManager.getInstance(project).findFile(virtualFile) as? KtFile } ?: return null
         ktFileCache.put(virtualFile.url, ktFile)
         return ktFile
+    }
+
+    fun getAllSourceKtFiles(): Sequence<KtFile> {
+        return modules.asFlatSequence()
+            .filter { it.isSourceModule }
+            .map { it.computeFiles(extended = true) }
+            .flatten()
+            .mapNotNull { getKtFile(it) }
     }
 }
