@@ -7,24 +7,24 @@ It's developed as part of the [Kotlin LSP Project](https://kotlinlang.org/docs/g
 ## RoadMap
 
 ### Current Scope for MVP
-- [x] Launch Modes
-    - [x] TCP Server (--tcp and --port {2090 by default})
-    - [x] stdio
-- [x] Project Handling 
-    - [x] Project Handling (Gradle: Single and Multi Module)
-- [x] Diagnostics
-- [x] Go to Definition
-- [x] Go to Implementations
-- [x] Go to References
-- [x] Hover
+✅ Launch Modes
+    ✅ TCP Server (--tcp and --port {2090 by default})
+    ✅ stdio
+✅ Project Handling 
+    ✅ Project Handling (Gradle: Single and Multi Module)
+✅ Diagnostics
+✅ Go to Definition
+✅ Go to Implementations
+✅ Go to References
+✅ Hover
     - [ ] Hover Documentation (KDoc based Description)
 - [ ] Code Completion
-    - [x] Dot based completions
+    ✅ Dot based completions
     - [ ] General completions
     - [ ] Context Aware completions
     - [ ] Import completions
 - [ ] Code Actions
-    - [x] Add Imports
+    ✅ Add Imports
 - [ ] Rename Refactoring
 - [ ] Document Symbols
 - [ ] Semantic Highlighting
