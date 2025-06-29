@@ -40,6 +40,7 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.actions.autocomplete.autocompleteAction
 import org.kotlinlsp.actions.codeaction.CodeActionContext
 import org.kotlinlsp.actions.codeaction.CodeActionRegistry
+import org.kotlinlsp.actions.documentSymbolsAction
 import org.kotlinlsp.actions.findReferencesAction
 import org.kotlinlsp.actions.goToDefinitionAction
 import org.kotlinlsp.actions.goToImplementationAction
@@ -312,5 +313,10 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     fun findReferences(path: String, position: Position): List<Location>? {
         val ktFile = index.getOpenedKtFile(path) ?: return null
         return project.read { findReferencesAction(ktFile, position, index) }
+    }
+
+    fun documentSymbols(path: String): List<DocumentSymbol> {
+        val ktFile = index.getOpenedKtFile(path) ?: return emptyList()
+        return project.read { documentSymbolsAction(ktFile) }
     }
 }

@@ -63,6 +63,7 @@ class KotlinLanguageServer(
             implementationProvider = Either.forLeft(true)
             codeActionProvider = Either.forLeft(true)
             referencesProvider = Either.forLeft(true)
+            documentSymbolProvider = Either.forLeft(true)
         }
         val serverInfo = ServerInfo().apply {
             name = "kotlin-lsp"
@@ -177,5 +178,10 @@ class KotlinLanguageServer(
     override fun references(params: ReferenceParams): CompletableFuture<List<Location>?> {
         val locations = analysisSession.findReferences(params.textDocument.uri, params.position)
         return completedFuture(locations)
+    }
+
+    override fun documentSymbol(params: DocumentSymbolParams): CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> {
+        val symbols = analysisSession.documentSymbols(params.textDocument.uri)
+        return completedFuture(symbols.map { Either.forRight(it) })
     }
 }
