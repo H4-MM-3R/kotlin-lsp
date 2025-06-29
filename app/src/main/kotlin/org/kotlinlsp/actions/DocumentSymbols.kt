@@ -104,9 +104,10 @@ private fun getChildSymbols(declaration: KtDeclaration): List<DocumentSymbol> {
         is KtFunction -> {
             // Functions can have local classes and functions
             declaration.bodyBlockExpression?.statements?.forEach { statement ->
-//              if (statement is KtDeclaration) {
-//                  toDocumentSymbol(statement)?.let { children.add(it) }
-//              }
+                // add classes or objects as children
+                if (statement is KtClassOrObject) {
+                    toDocumentSymbol(statement)?.let { children.add(it) }
+                }
             }
         }
         is KtProperty -> {
