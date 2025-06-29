@@ -16,21 +16,21 @@ It's developed as part of the [Kotlin LSP Project](https://kotlinlang.org/docs/g
 - ✅ Go to Definition
 - ✅ Go to Implementations
 - ✅ Go to References
-- ✅ Hover
-    - [ ] Hover Documentation (KDoc based Description)
-- [ ] Code Completion
-    - ✅ Dot based completions
-    - [ ] General completions
-    - [ ] Context Aware completions
-    - [ ] Import completions
-- [ ] Code Actions
-    - ✅ Add Imports
 - [ ] Rename Refactoring
-- [ ] Document Symbols
+- ✅ Document Symbols
 - [ ] Semantic Highlighting
 - [ ] Signature Help
 - [ ] Inlay Hints
 - [ ] Formatting
+- [ ] Code Actions
+  - ✅ Add Imports
+- ✅ Hover
+  - [ ] Hover Documentation (KDoc based Description)
+- [ ] Code Completion
+  - ✅ Dot based completions
+  - [ ] General completions
+  - [ ] Context Aware completions
+  - [ ] Import completions
 
 ### Out of Scope ( for now )
 - [ ] Project Handling 
