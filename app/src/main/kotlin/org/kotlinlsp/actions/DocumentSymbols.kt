@@ -5,9 +5,8 @@ import org.eclipse.lsp4j.SymbolKind
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.renderer.declarations.impl.KaDeclarationRendererForSource
-import org.jetbrains.kotlin.analysis.api.renderer.types.impl.KaTypeRendererForSource
-import org.jetbrains.kotlin.analysis.api.symbols.KaFunctionSymbol
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.getChildOfType
 import org.kotlinlsp.common.toLspRange
 
 fun documentSymbolsAction(ktFile: KtFile): List<DocumentSymbol> {
@@ -24,6 +23,7 @@ private fun toDocumentSymbol(declaration: KtDeclaration): DocumentSymbol? {
     // For the selection range, try to get the name identifier range, fallback to full range
     val selectionRange = try {
         when (declaration) {
+            is KtObjectDeclaration -> declaration.getObjectKeyword()?.textRange?.toLspRange(declaration.containingFile) ?: range
             is KtNamedDeclaration -> {
                 val nameIdentifier = declaration.nameIdentifier
                 nameIdentifier?.textRange?.toLspRange(declaration.containingFile) ?: range
@@ -47,7 +47,7 @@ private fun toDocumentSymbol(declaration: KtDeclaration): DocumentSymbol? {
 
 @OptIn(KaExperimentalApi::class, KaExperimentalApi::class)
 private fun getDeclarationNameWithSignature(declaration: KtDeclaration): String? {
-    val originalName = declaration.name ?: return null
+    val originalName = declaration.name ?: ""
     return when (declaration) {
         is KtNamedFunction -> {
             val receiver = declaration.receiverTypeReference?.text?.let { "$it." } ?: ""
@@ -112,23 +112,37 @@ private fun getChildSymbols(declaration: KtDeclaration): List<DocumentSymbol> {
         }
         is KtProperty -> {
             // Properties can have custom getters and setters
-            declaration.getter?.let { getter ->
-                children.add(DocumentSymbol().apply {
-                    name = "get"
-                    kind = SymbolKind.Method
-                    range = getter.textRange.toLspRange(declaration.containingFile)
-                    selectionRange = range
-                    this.children = emptyList()
-                })
-            }
-            declaration.setter?.let { setter ->
-                children.add(DocumentSymbol().apply {
-                    name = "set"
-                    kind = SymbolKind.Method
-                    range = setter.textRange.toLspRange(declaration.containingFile)
-                    selectionRange = range
-                    this.children = emptyList()
-                })
+//            declaration.getter?.let { getter ->
+//                children.add(DocumentSymbol().apply {
+//                    name = "get"
+//                    kind = SymbolKind.Method
+//                    range = getter.textRange.toLspRange(declaration.containingFile)
+//                    selectionRange = range
+//                    this.children = emptyList()
+//                })
+//            }
+//            declaration.setter?.let { setter ->
+//                children.add(DocumentSymbol().apply {
+//                    name = "set"
+//                    kind = SymbolKind.Method
+//                    range = setter.textRange.toLspRange(declaration.containingFile)
+//                    selectionRange = range
+//                    this.children = emptyList()
+//                })
+//            }
+            
+            // Properties can have object expressions - traverse all children to find them
+            declaration.children.forEach { child ->
+                if (child is KtPropertyDelegate) {
+                    child.getChildOfType<KtCallExpression>()
+                        ?.getChildOfType<KtLambdaArgument>()
+                        ?.getChildOfType<KtLambdaExpression>()
+                        ?.getChildOfType<KtFunctionLiteral>()
+                        ?.bodyExpression?.statements?.forEach { statement ->
+                            val decl = statement.getChildOfType<KtObjectDeclaration>() ?: return@forEach
+                            toDocumentSymbol(decl)?.let { children.add(it) }
+                        }
+                }
             }
         }
     }
