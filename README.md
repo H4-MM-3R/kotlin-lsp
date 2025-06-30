@@ -6,6 +6,10 @@ It's developed as part of the [Kotlin LSP Project](https://kotlinlang.org/docs/g
 
 ## RoadMap
 
+### Support for Editors
+- ✅ VSCode ( Extension )
+- ✅ Neovim ( Executable or TCP server )
+
 ### Current Scope for MVP
 - ✅ Launch Modes
     - ✅ TCP Server (--tcp and --port {2090 by default})
