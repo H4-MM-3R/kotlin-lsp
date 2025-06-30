@@ -9,3 +9,6 @@ lsp-dist
 .kotlin-lsp
 .kotlinlsp-modules.json
 log.txt
+
+# VSCode Extension
+node_modules
