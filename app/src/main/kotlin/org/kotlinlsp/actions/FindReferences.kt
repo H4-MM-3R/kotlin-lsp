@@ -5,6 +5,7 @@ import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.Position
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.symbols.KaDeclarationSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.pointers.KaSymbolPointer
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtElement
@@ -14,104 +15,153 @@ import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.kotlinlsp.common.toLspRange
 import org.kotlinlsp.common.toOffset
 import org.kotlinlsp.index.Index
+import org.kotlinlsp.index.db.Declaration
+import org.kotlinlsp.index.db.adapters.prefixSearch
+
+private data class SymbolData(
+    val pointer: KaSymbolPointer<KaDeclarationSymbol>,
+    val name: String
+)
 
 fun findReferencesAction(ktFile: KtFile, position: Position, index: Index): List<Location>? {
     val offset = position.toOffset(ktFile)
     val ktElement = ktFile.findElementAt(offset)?.parentOfType<KtElement>() ?: return null
     
-    // Get the symbol at the current position
-    val targetSymbol = analyze(ktElement) {
-        when (ktElement) {
+    // Get the symbol at the current position and create a pointer for efficient comparison
+    val targetData = analyze(ktElement) {
+        val symbol = when (ktElement) {
             is KtDeclaration -> ktElement.symbol
             else -> ktElement.mainReference?.resolveToSymbol() as? KaDeclarationSymbol
-        } ?: return null
+        } ?: return@analyze null
+        
+        val symbolPointer = symbol.createPointer()
+        // Get symbol name for pre-filtering files
+        val symbolName = when (ktElement) {
+            is KtDeclaration -> ktElement.name
+            else -> ktElement.text
+        } ?: return@analyze null
+        
+        SymbolData(symbolPointer, symbolName)
     } ?: return null
     
+    val targetSymbolPointer = targetData.pointer
+    val targetSymbolName = targetData.name
+    
+    // Get deduplicated list of files to search, using virtualFile.path as the key
+    val filesToSearch = getFilesToSearch(index, targetSymbolName)
+    
+    // Search for references in each file (could be parallelized with coroutines in the future)
     val references = mutableListOf<Location>()
-    
-    // Search through all opened files and files in the project
-    val filesToSearch = mutableSetOf<KtFile>()
-    
-    // Add all opened files
-    index.openedKtFiles.forEach { (_, file) ->
-        filesToSearch.add(file)
-    }
-    
-    // Add all source files from the project
-    index.getAllSourceKtFiles().forEach { file ->
-        filesToSearch.add(file)
-    }
-    
-    // Search for references in each file
     filesToSearch.forEach { file ->
-        val fileReferences = findReferencesInFile(file, targetSymbol)
-        references.addAll(fileReferences)
+        try {
+            val fileReferences = findReferencesInFile(file, targetSymbolPointer)
+            references.addAll(fileReferences)
+        } catch (e: Exception) {
+            // Silently ignore resolution errors for robustness
+        }
     }
     
     return references.ifEmpty { null }
 }
 
-private fun findReferencesInFile(ktFile: KtFile, targetSymbol: KaDeclarationSymbol): List<Location> {
-    val references = mutableListOf<Location>()
+/**
+ * Get deduplicated list of files to search, pre-filtered by symbol name
+ */
+private fun getFilesToSearch(index: Index, symbolName: String): List<KtFile> {
+    // Use a map with virtualFile.path as key to automatically deduplicate
+    val filesMap = mutableMapOf<String, KtFile>()
     
-    // Collect all reference expressions in the file
-    val referenceExpressions = ktFile.collectDescendantsOfType<KtReferenceExpression>()
+    // Add all opened files
+    index.openedKtFiles.forEach { (_, file) ->
+        filesMap[file.virtualFile.path] = file
+    }
     
-    for (refExpr in referenceExpressions) {
-        try {
-            analyze(refExpr) {
-                val resolvedSymbol = refExpr.mainReference.resolveToSymbol() as? KaDeclarationSymbol
-                if (resolvedSymbol != null && symbolsAreEqual(resolvedSymbol, targetSymbol)) {
-                    val location = Location().apply {
-                        uri = ktFile.virtualFile.url
-                        range = refExpr.textRange.toLspRange(ktFile)
-                    }
-                    references.add(location)
-                }
-            }
+    // Name pre-filter: Find files that contain declarations with the target symbol name
+    val candidateFiles = index.query { db ->
+        db.declarationsDb.prefixSearch<Declaration>(symbolName)
+            .map { (_, declaration) -> declaration.file }
+            .toSet()
+    }
+    
+    // Add files that potentially contain the symbol
+    candidateFiles.forEach { filePath ->
+        val virtualFile = try {
+            com.intellij.openapi.vfs.VirtualFileManager.getInstance().findFileByUrl(filePath)
         } catch (e: Exception) {
-            // Silently ignore resolution errors for robustness
-            // In production, you might want to log these for debugging
+            null
+        }
+        
+        virtualFile?.let { vf ->
+            index.getKtFile(vf)?.let { ktFile ->
+                filesMap[vf.path] = ktFile
+            }
         }
     }
     
-    // Also check for declaration references (the declaration itself)
-    val declarations = ktFile.collectDescendantsOfType<KtDeclaration>()
-    for (decl in declarations) {
-        try {
-            analyze(decl) {
-                val declSymbol = decl.symbol
-                if (declSymbol != null && symbolsAreEqual(declSymbol, targetSymbol)) {
-                    val location = Location().apply {
-                        uri = ktFile.virtualFile.url
-                        range = decl.textRange.toLspRange(ktFile)
+    // Add all source files from the project as fallback for cases where the symbol
+    // might not be indexed yet (e.g., just added) or for implicit references
+    index.getAllSourceKtFiles().forEach { file ->
+        filesMap[file.virtualFile.path] = file
+    }
+    
+    return filesMap.values.toList()
+}
+
+/**
+ * Find references in a single file using batched analysis
+ */
+private fun findReferencesInFile(ktFile: KtFile, targetSymbolPointer: KaSymbolPointer<KaDeclarationSymbol>): List<Location> {
+    val references = mutableListOf<Location>()
+    
+    // Single analyze session for the entire file
+    analyze(ktFile) {
+        // Collect all reference expressions in the file
+        val referenceExpressions = ktFile.collectDescendantsOfType<KtReferenceExpression>()
+        
+        for (refExpr in referenceExpressions) {
+            try {
+                val resolvedSymbol = refExpr.mainReference.resolveToSymbol() as? KaDeclarationSymbol
+                if (resolvedSymbol != null) {
+                    val resolvedPointer = resolvedSymbol.createPointer()
+                    // Compare symbol pointers by restoring and comparing symbols
+                    val targetSymbol = targetSymbolPointer.restoreSymbol()
+                    val resolvedRestoredSymbol = resolvedPointer.restoreSymbol()
+                    if (targetSymbol != null && resolvedRestoredSymbol != null && targetSymbol == resolvedRestoredSymbol) {
+                        val location = Location().apply {
+                            uri = ktFile.virtualFile.url
+                            range = refExpr.textRange.toLspRange(ktFile)
+                        }
+                        references.add(location)
                     }
-                    references.add(location)
                 }
+            } catch (e: Exception) {
+                // Silently ignore resolution errors for individual references
             }
-        } catch (e: Exception) {
-            // Silently ignore resolution errors for robustness
+        }
+        
+        // Check declarations too (the declaration itself is also a "reference")
+        val declarations = ktFile.collectDescendantsOfType<KtDeclaration>()
+        for (decl in declarations) {
+            try {
+                val declSymbol = decl.symbol
+                if (declSymbol != null) {
+                    val declPointer = declSymbol.createPointer()
+                    // Compare symbol pointers by restoring and comparing symbols
+                    val targetSymbol = targetSymbolPointer.restoreSymbol()
+                    val declRestoredSymbol = declPointer.restoreSymbol()
+                    if (targetSymbol != null && declRestoredSymbol != null && targetSymbol == declRestoredSymbol) {
+                        val location = Location().apply {
+                            uri = ktFile.virtualFile.url
+                            range = decl.textRange.toLspRange(ktFile)
+                        }
+                        references.add(location)
+                    }
+                }
+            } catch (e: Exception) {
+                // Silently ignore resolution errors for individual declarations
+            }
         }
     }
     
     return references
-}
-
-private fun symbolsAreEqual(symbol1: KaDeclarationSymbol, symbol2: KaDeclarationSymbol): Boolean {
-    // Compare symbols by their IDs/signatures  
-    // The safest way is to compare the pointer/symbol identity within the same analysis session
-    // However, since we're comparing across different analysis sessions, we need to use
-    // more stable identifiers like the containing declaration and psi elements
-    if (symbol1 == symbol2) return true
-    
-    // Try to compare by their PSI locations if available
-    val psi1 = symbol1.psi
-    val psi2 = symbol2.psi
-    if (psi1 != null && psi2 != null) {
-        return psi1 == psi2 || 
-               (psi1.containingFile == psi2.containingFile && 
-                psi1.textOffset == psi2.textOffset)
-    }
-    
-    return false
 } 
