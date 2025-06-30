@@ -47,7 +47,7 @@ private fun toDocumentSymbol(declaration: KtDeclaration): DocumentSymbol? {
 
 @OptIn(KaExperimentalApi::class, KaExperimentalApi::class)
 private fun getDeclarationNameWithSignature(declaration: KtDeclaration): String? {
-    val originalName = declaration.name ?: ""
+    val originalName = declaration.name ?: "<anonymous>"
     return when (declaration) {
         is KtNamedFunction -> {
             val receiver = declaration.receiverTypeReference?.text?.let { "$it." } ?: ""
@@ -79,6 +79,9 @@ private fun getDeclarationNameWithSignature(declaration: KtDeclaration): String?
             } else {
                 "object $originalName"
             }
+        }
+        is KtClassInitializer -> {
+           "init"
         }
         else -> originalName
     }
