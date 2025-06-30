@@ -45,6 +45,7 @@ import org.kotlinlsp.actions.findReferencesAction
 import org.kotlinlsp.actions.goToDefinitionAction
 import org.kotlinlsp.actions.goToImplementationAction
 import org.kotlinlsp.actions.hoverAction
+import org.kotlinlsp.actions.renameAction
 import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.analysis.registration.Registrar
 import org.kotlinlsp.analysis.registration.lspPlatform
@@ -318,5 +319,10 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     fun documentSymbols(path: String): List<DocumentSymbol> {
         val ktFile = index.getOpenedKtFile(path) ?: return emptyList()
         return project.read { documentSymbolsAction(ktFile) }
+    }
+
+    fun rename(path: String, position: Position, newName: String): WorkspaceEdit? {
+        val ktFile = index.getOpenedKtFile(path) ?: return null
+        return project.read { renameAction(ktFile, position, newName, index) }
     }
 }

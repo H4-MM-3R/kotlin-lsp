@@ -64,6 +64,7 @@ class KotlinLanguageServer(
             codeActionProvider = Either.forLeft(true)
             referencesProvider = Either.forLeft(true)
             documentSymbolProvider = Either.forLeft(true)
+            renameProvider = Either.forLeft(true)
         }
         val serverInfo = ServerInfo().apply {
             name = "kotlin-lsp"
@@ -183,5 +184,10 @@ class KotlinLanguageServer(
     override fun documentSymbol(params: DocumentSymbolParams): CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> {
         val symbols = analysisSession.documentSymbols(params.textDocument.uri)
         return completedFuture(symbols.map { Either.forRight(it) })
+    }
+
+    override fun rename(params: RenameParams): CompletableFuture<WorkspaceEdit?> {
+        val workspaceEdit = analysisSession.rename(params.textDocument.uri, params.position, params.newName)
+        return completedFuture(workspaceEdit)
     }
 }

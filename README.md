@@ -20,7 +20,7 @@ It's developed as part of the [Kotlin LSP Project](https://kotlinlang.org/docs/g
 - ✅ Go to Definition
 - ✅ Go to Implementations
 - ✅ Go to References
-- [ ] Rename Refactoring
+- ✅ Rename Refactoring
 - ✅ Document Symbols
 - [ ] Semantic Highlighting
 - [ ] Signature Help
