@@ -15,21 +15,22 @@ fi
 
 echo ""
 echo "Step 1: Building Kotlin LSP server..."
-./scripts/build.sh
+./build.sh
 
 echo ""
 echo "Step 2: Setting up VS Code extension..."
-cd vscode-extension
+cd ../vscode-extension
 
 echo "Installing npm dependencies..."
 npm install
 
 echo "Bundling LSP server with extension..."
-./bundle-server.sh
+../scripts/bundle-server.sh
 
 echo "Compiling TypeScript..."
 npm run compile
 
+cd ..
 echo ""
 echo "✅ Setup complete!"
 echo ""
@@ -48,3 +49,4 @@ echo "Troubleshooting:"
 echo "- Check VS Code Output panel → 'Kotlin LSP' for server logs"
 echo "- Ensure Java 21+ is installed: java -version"
 echo "- Test server manually: ./lsp-dist/kotlin-lsp-0.1a/bin/kotlin-lsp --version" 
+
