@@ -1,10 +1,8 @@
 package org.kotlinlsp.actions
 
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.search.ProjectScope
 import com.intellij.psi.util.parentOfType
 import org.eclipse.lsp4j.Position
-import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.TextEdit
 import org.eclipse.lsp4j.WorkspaceEdit
 import org.jetbrains.kotlin.analysis.api.analyze
@@ -15,7 +13,6 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaClassSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaDeclarationSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.pointers.KaSymbolPointer
 import org.jetbrains.kotlin.idea.references.mainReference
-import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.kotlinlsp.analysis.services.DirectInheritorsProvider
@@ -24,12 +21,19 @@ import org.kotlinlsp.common.toOffset
 import org.kotlinlsp.index.Index
 import org.kotlinlsp.index.db.Declaration
 import org.kotlinlsp.index.db.adapters.prefixSearch
+import kotlinx.coroutines.*
+import java.util.concurrent.ConcurrentHashMap
+
+private val renameDispatcher by lazy {
+    val cores = Runtime.getRuntime().availableProcessors()
+    val parallelism = (cores * 2 / 3).coerceAtMost(8)
+    Dispatchers.Default.limitedParallelism(parallelism)
+}
 
 fun renameAction(ktFile: KtFile, position: Position, newName: String, index: Index): WorkspaceEdit? {
     val offset = position.toOffset(ktFile)
     val ktElement = ktFile.findElementAt(offset)?.parentOfType<KtElement>() ?: return null
     
-    // Get the symbol at the current position and create a pointer for efficient comparison
     val targetData = analyze(ktElement) {
         val symbol = when (ktElement) {
             is KtDeclaration -> ktElement.symbol
@@ -37,7 +41,6 @@ fun renameAction(ktFile: KtFile, position: Position, newName: String, index: Ind
         } ?: return@analyze null
         
         val symbolPointer = symbol.createPointer()
-        // Get symbol name for pre-filtering files
         val symbolName = when (ktElement) {
             is KtDeclaration -> ktElement.name
             else -> ktElement.text
@@ -49,20 +52,22 @@ fun renameAction(ktFile: KtFile, position: Position, newName: String, index: Ind
     val targetSymbolPointer = targetData.first
     val targetSymbolName = targetData.second
     
-    // Get deduplicated list of files to search, using virtualFile.path as the key
     val filesToSearch = getFilesToSearch(index, targetSymbolName)
+    val documentChanges = ConcurrentHashMap<String, MutableList<TextEdit>>()
     
-    // Find all occurrences to rename (references and declarations)
-    val documentChanges = mutableMapOf<String, MutableList<TextEdit>>()
-    filesToSearch.forEach { file ->
-        try {
-            val fileEdits = findRenameOccurrencesInFile(file, targetSymbolPointer, newName)
-            if (fileEdits.isNotEmpty()) {
-                documentChanges[file.virtualFile.url] = fileEdits.toMutableList()
+    runBlocking {
+        filesToSearch.map { file ->
+            async(renameDispatcher) {
+                try {
+                    val fileEdits = findRenameOccurrencesInFile(file, targetSymbolPointer, newName)
+                    if (fileEdits.isNotEmpty()) {
+                        documentChanges[file.virtualFile.url] = fileEdits.toMutableList()
+                    }
+                } catch (e: Exception) {
+                    // Silently ignore resolution errors for robustness
+                }
             }
-        } catch (e: Exception) {
-            // Silently ignore resolution errors for robustness
-        }
+        }.awaitAll()
     }
     
     // Also find and rename implementations/overrides if this is a callable symbol
@@ -165,7 +170,7 @@ private fun findImplementations(ktFile: KtFile, ktElement: KtElement, targetSymb
 }
 
 /**
- * Get deduplicated list of files to search, pre-filtered by symbol name
+ * Get list of files to search, pre-filtered by symbol name
  */
 private fun getFilesToSearch(index: Index, symbolName: String): List<KtFile> {
     // Use a map with virtualFile.path as key to automatically deduplicate
@@ -198,12 +203,7 @@ private fun getFilesToSearch(index: Index, symbolName: String): List<KtFile> {
         }
     }
     
-    // Add all source files from the project as fallback for cases where the symbol
-    // might not be indexed yet (e.g., just added) or for implicit references
-    index.getAllSourceKtFiles().forEach { file ->
-        filesMap[file.virtualFile.path] = file
-    }
-    
+
     return filesMap.values.toList()
 }
 
@@ -213,26 +213,18 @@ private fun getFilesToSearch(index: Index, symbolName: String): List<KtFile> {
 private fun findRenameOccurrencesInFile(ktFile: KtFile, targetSymbolPointer: KaSymbolPointer<KaDeclarationSymbol>, newName: String): List<TextEdit> {
     val edits = mutableListOf<TextEdit>()
     
-    // Single analyze session for the entire file
     analyze(ktFile) {
-        // Collect all reference expressions in the file
+        val targetSymbol = targetSymbolPointer.restoreSymbol() ?: return@analyze
         val referenceExpressions = ktFile.collectDescendantsOfType<KtReferenceExpression>()
         
         for (refExpr in referenceExpressions) {
             try {
                 val resolvedSymbol = refExpr.mainReference.resolveToSymbol() as? KaDeclarationSymbol
-                if (resolvedSymbol != null) {
-                    val resolvedPointer = resolvedSymbol.createPointer()
-                    // Compare symbol pointers by restoring and comparing symbols
-                    val targetSymbol = targetSymbolPointer.restoreSymbol()
-                    val resolvedRestoredSymbol = resolvedPointer.restoreSymbol()
-                    if (targetSymbol != null && resolvedRestoredSymbol != null && targetSymbol == resolvedRestoredSymbol) {
-                        val edit = TextEdit().apply {
-                            range = refExpr.textRange.toLspRange(ktFile)
-                            this.newText = newName
-                        }
-                        edits.add(edit)
-                    }
+                if (resolvedSymbol != null && resolvedSymbol == targetSymbol) {
+                    edits.add(TextEdit().apply {
+                        range = refExpr.textRange.toLspRange(ktFile)
+                        this.newText = newName
+                    })
                 }
             } catch (e: Exception) {
                 // Silently ignore resolution errors for individual references
@@ -243,28 +235,16 @@ private fun findRenameOccurrencesInFile(ktFile: KtFile, targetSymbolPointer: KaS
         val declarations = ktFile.collectDescendantsOfType<KtDeclaration>()
         for (decl in declarations) {
             try {
-                val declSymbol = decl.symbol
-                if (declSymbol != null) {
-                    val declPointer = declSymbol.createPointer()
-                    // Compare symbol pointers by restoring and comparing symbols
-                    val targetSymbol = targetSymbolPointer.restoreSymbol()
-                    val declRestoredSymbol = declPointer.restoreSymbol()
-                    if (targetSymbol != null && declRestoredSymbol != null && targetSymbol == declRestoredSymbol) {
-                        // For declarations, we only want to rename the name identifier, not the entire declaration
-                        // Use the name part of the declaration if available, otherwise the entire declaration
-                        if (decl.name != null) {
-                            // Find the name identifier within the declaration text range
-                            val nameStart = decl.textRange.startOffset + decl.text.indexOf(decl.name!!)
-                            val nameEnd = nameStart + decl.name!!.length
-                            val nameRange = com.intellij.openapi.util.TextRange(nameStart, nameEnd)
-                            
-                            val edit = TextEdit().apply {
-                                range = nameRange.toLspRange(ktFile)
-                                this.newText = newName
-                            }
-                            edits.add(edit)
-                        }
-                    }
+                val declSymbol = decl.symbol as? KaDeclarationSymbol
+                if (declSymbol != null && declSymbol == targetSymbol && decl.name != null) {
+                    val nameStart = decl.textRange.startOffset + decl.text.indexOf(decl.name!!)
+                    val nameEnd = nameStart + decl.name!!.length
+                    val nameRange = com.intellij.openapi.util.TextRange(nameStart, nameEnd)
+                    
+                    edits.add(TextEdit().apply {
+                        range = nameRange.toLspRange(ktFile)
+                        this.newText = newName
+                    })
                 }
             } catch (e: Exception) {
                 // Silently ignore resolution errors for individual declarations

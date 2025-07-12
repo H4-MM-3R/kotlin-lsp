@@ -9,10 +9,7 @@ import org.jetbrains.kotlin.analysis.api.platform.declarations.KotlinDirectInher
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinProjectStructureProvider
 import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.pointers.KaSymbolPointer
 import org.jetbrains.kotlin.idea.references.mainReference
-import org.jetbrains.kotlin.name.CallableId
-import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtElement
@@ -20,11 +17,6 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.analysis.services.DirectInheritorsProvider
 import org.kotlinlsp.common.toLspRange
 import org.kotlinlsp.common.toOffset
-
-private data class CallableData(
-    val pointer: KaSymbolPointer<KaCallableSymbol>,
-    val callableId: CallableId
-)
 
 fun goToImplementationAction(ktFile: KtFile, position: Position): List<Location>? {
     val directInheritorsProvider = ktFile.project.getService(KotlinDirectInheritorsProvider::class.java) as DirectInheritorsProvider
@@ -44,62 +36,44 @@ fun goToImplementationAction(ktFile: KtFile, position: Position): List<Location>
         // If it's a class, we find its inheritors directly
         directInheritorsProvider.getDirectKotlinInheritorsByClassId(classId, module, scope, true)
     } else {
-        // Otherwise it must be a class method or a variable
-        // In this case, we need to search for the overridden declarations among the inheritors of the containing class
-        val callableData = analyze(ktElement){
-            val symbol =
-                if(ktElement is KtDeclaration) ktElement.symbol as? KaCallableSymbol ?: return null
-                else ktElement.mainReference?.resolveToSymbol() as? KaCallableSymbol ?: return null
-            val classSymbol = symbol.containingSymbol as? KaClassSymbol ?: return null
-            val containingClassId = classSymbol.classId ?: return null
-            val callableId = symbol.callableId ?: return null
+        // Otherwise it must be a class method or a variable - find overriding declarations
+        val callableInfo = analyze(ktElement){
+            val symbol = when(ktElement) {
+                is KtDeclaration -> ktElement.symbol as? KaCallableSymbol
+                else -> ktElement.mainReference?.resolveToSymbol() as? KaCallableSymbol
+            } ?: return@analyze null
             
-            Pair(CallableData(symbol.createPointer(), callableId), containingClassId)
+            val classSymbol = symbol.containingSymbol as? KaClassSymbol ?: return@analyze null
+            val containingClassId = classSymbol.classId ?: return@analyze null
+            val callableId = symbol.callableId ?: return@analyze null
+            
+            Triple(symbol.createPointer(), callableId, containingClassId)
         } ?: return null
 
-        val (baseCallableData, containingClassId) = callableData
-        val baseCallablePtr = baseCallableData.pointer
-        val baseCallableId = baseCallableData.callableId
+        val (baseCallablePtr, baseCallableId, containingClassId) = callableInfo
         val baseShortName = baseCallableId.callableName
         
-        // Get distinct inheritors by classId to avoid processing duplicates
-        val distinctInheritors = directInheritorsProvider
+        // Get inheritors and search for overriding declarations
+        directInheritorsProvider
             .getDirectKotlinInheritorsByClassId(containingClassId, module, scope, true)
             .distinctBy { it.getClassId() }
-        
-        // Search for overriding declarations using single analysis session per inheritor
-        distinctInheritors.mapNotNull { ktClass ->
-            try {
-                analyze(ktClass) {
-                    // Restore the base callable symbol once per analysis session
-                    val baseCallableSymbol = baseCallablePtr.restoreSymbol() ?: return@analyze null
-                    
-                    // Find declarations in this class that match the callable name (pre-filter)
-                    val matchingDeclarations = ktClass.declarations.filter { declaration ->
-                        declaration.name == baseShortName.asString()
-                    }
-                    
-                    // Check which of the matching declarations actually overrides the base callable
-                    matchingDeclarations.firstOrNull { declaration ->
-                        val declarationSymbol = declaration.symbol as? KaCallableSymbol ?: return@firstOrNull false
+            .mapNotNull { ktClass ->
+                val matchingDeclarations = ktClass.declarations.filter { it.name == baseShortName.asString() }
+                if (matchingDeclarations.isEmpty()) return@mapNotNull null
+                
+                try {
+                    analyze(ktClass) {
+                        val baseCallableSymbol = baseCallablePtr.restoreSymbol() ?: return@analyze null
                         
-                        // Use built-in override checking instead of manual signature comparison
-                        declarationSymbol.directlyOverriddenSymbols.any { overriddenSymbol ->
-                            // Check if this symbol is the same as our base callable
-                            // We compare by callableId as a lightweight check first
-                            if (overriddenSymbol.callableId != baseCallableId) return@any false
-                            
-                            // For more thorough comparison, we could use symbol equality,
-                            // but callableId comparison should be sufficient for most cases
-                            true
+                        matchingDeclarations.firstOrNull { declaration ->
+                            val declSymbol = declaration.symbol as? KaCallableSymbol ?: return@firstOrNull false
+                            declSymbol.directlyOverriddenSymbols.any { it.callableId == baseCallableId }
                         }
                     }
+                } catch (e: Exception) {
+                    null
                 }
-            } catch (e: Exception) {
-                // Silently ignore analysis errors for robustness
-                null
             }
-        }
     }
 
     return inheritors.map {
