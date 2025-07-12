@@ -47,10 +47,10 @@ fun goToImplementationAction(ktFile: KtFile, position: Position): List<Location>
             val containingClassId = classSymbol.classId ?: return@analyze null
             val callableId = symbol.callableId ?: return@analyze null
             
-            Triple(symbol.createPointer(), callableId, containingClassId)
+            Pair(callableId, containingClassId)
         } ?: return null
 
-        val (baseCallablePtr, baseCallableId, containingClassId) = callableInfo
+        val (baseCallableId, containingClassId) = callableInfo
         val baseShortName = baseCallableId.callableName
         
         // Get inheritors and search for overriding declarations
@@ -63,8 +63,6 @@ fun goToImplementationAction(ktFile: KtFile, position: Position): List<Location>
                 
                 try {
                     analyze(ktClass) {
-                        val baseCallableSymbol = baseCallablePtr.restoreSymbol() ?: return@analyze null
-                        
                         matchingDeclarations.firstOrNull { declaration ->
                             val declSymbol = declaration.symbol as? KaCallableSymbol ?: return@firstOrNull false
                             declSymbol.directlyOverriddenSymbols.any { it.callableId == baseCallableId }
