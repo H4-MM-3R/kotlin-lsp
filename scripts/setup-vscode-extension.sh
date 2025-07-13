@@ -15,11 +15,11 @@ fi
 
 echo ""
 echo "Step 1: Building Kotlin LSP server..."
-./build.sh
+./scripts/build.sh
 
 echo ""
 echo "Step 2: Setting up VS Code extension..."
-cd ../vscode-extension
+cd vscode-extension
 
 echo "Installing npm dependencies..."
 npm install
