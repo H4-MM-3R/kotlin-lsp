@@ -2,7 +2,7 @@
   "name": "kotlin-lsp-vscode",
   "displayName": "Kotlin Language Server",
   "description": "Kotlin language support powered by Kotlin Analysis API",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "repository": {
       "type": "git",
       "url": "https://github.com/h4-mm-3r/kotlin-lsp"

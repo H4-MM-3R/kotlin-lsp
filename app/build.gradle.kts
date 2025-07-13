@@ -10,7 +10,7 @@ plugins {
 application {
     applicationName = "kotlin-lsp"
     mainClass = "org.kotlinlsp.MainKt"
-    version = "0.1a"
+    version = "1.0"
 }
 
 repositories {
