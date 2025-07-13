@@ -1,48 +1,54 @@
 #!/bin/bash
 
-# Script to bundle the Kotlin LSP server with the VS Code extension
+# A script to bundle the Kotlin LSP server with the VSCode extension.
 
-set -e
+set -e 
+set -u 
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-EXTENSION_DIR="$SCRIPT_DIR"
-SERVER_DIR="$EXTENSION_DIR/server"
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+EXTENSION_DIR="$PROJECT_ROOT/vscode-extension"
+LSP_DIST_DIR="$PROJECT_ROOT/lsp-dist"
+SERVER_BUNDLE_DIR="$EXTENSION_DIR/server"
 
-echo "Bundling Kotlin LSP server with VS Code extension..."
+BLUE='\033[1;34m'
+NONE='\033[0m' 
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
 
-# Check if the LSP server is built
-LSP_DIST="$PROJECT_ROOT/lsp-dist/kotlin-lsp-0.1a"
-if [ ! -d "$LSP_DIST" ]; then
-    echo "Error: LSP server not found at $LSP_DIST"
-    echo "Please build the server first with: ./gradlew installDist"
+echo -e "\n${YELLOW}Bundling Kotlin LSP server with VSCode extension...${NONE}\n"
+
+LSP_BUILD_DIR=$(find "$LSP_DIST_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit)
+
+if [ -z "$LSP_BUILD_DIR" ] || [ ! -d "$LSP_BUILD_DIR/bin" ]; then
+    echo "❌ Error: LSP server build not found in '$LSP_DIST_DIR'."
+    echo "   Please build the server first by running: ./scripts/build.sh"
     exit 1
 fi
+echo -e " ${BLUE}--> Found server build at: $LSP_BUILD_DIR${NONE}\n"
 
-# Create server directory in extension
-echo "Creating server directory..."
-rm -rf "$SERVER_DIR"
-mkdir -p "$SERVER_DIR"
+echo -e " ${BLUE}--> Cleaning and recreating bundle directory: '$SERVER_BUNDLE_DIR'...${NONE}\n"
+rm -rf "$SERVER_BUNDLE_DIR"
+mkdir -p "$SERVER_BUNDLE_DIR"
 
-# Copy the entire LSP distribution
-echo "Copying LSP server files..."
-cp -r "$LSP_DIST"/* "$SERVER_DIR/"
+echo -e " ${BLUE}--> Copying server files...${NONE}\n"
+shopt -s dotglob
+cp -a "$LSP_BUILD_DIR"/* "$SERVER_BUNDLE_DIR/"
+shopt -u dotglob
 
-# Make scripts executable
-echo "Making scripts executable..."
-chmod +x "$SERVER_DIR/bin/kotlin-lsp" 2>/dev/null || true
-chmod +x "$SERVER_DIR/bin/kotlin-lsp.bat" 2>/dev/null || true
+echo -e " ${BLUE}--> Making launch scripts executable...${NONE}\n"
+KOTLIN_LSP_SCRIPT="$SERVER_BUNDLE_DIR/bin/kotlin-lsp"
+KOTLIN_LSP_BAT_SCRIPT="$SERVER_BUNDLE_DIR/bin/kotlin-lsp.bat"
 
-# Update package.json to include the server in the extension package
-echo "Server bundled successfully!"
-echo "Server location: $SERVER_DIR"
-echo ""
-echo "To test the extension:"
-echo "1. cd $EXTENSION_DIR"
-echo "2. npm install"
-echo "3. npm run compile"
-echo "4. Open in VS Code and press F5"
-echo ""
-echo "To package the extension:"
-echo "1. npm install -g vsce"
-echo "2. vsce package" 
+if [ -f "$KOTLIN_LSP_SCRIPT" ]; then
+    chmod +x "$KOTLIN_LSP_SCRIPT"
+else
+    echo -e " ${RED}Warning: 'kotlin-lsp' script not found, skipping chmod.${NONE}\n"
+fi
+
+if [ -f "$KOTLIN_LSP_BAT_SCRIPT" ]; then
+    chmod +x "$KOTLIN_LSP_BAT_SCRIPT"
+else
+    echo -e " ${RED}--> Warning: 'kotlin-lsp.bat' script not found, skipping chmod.${NONE}\n"
+fi
+
+echo "✅ Server bundled successfully into '$SERVER_BUNDLE_DIR'." 
