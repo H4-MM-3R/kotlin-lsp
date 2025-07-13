@@ -12,6 +12,7 @@ log.txt
 
 # VSCode Extension
 node_modules
+out
 
 # virtual env 
 test-env

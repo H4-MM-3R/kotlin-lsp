@@ -59,7 +59,18 @@ function activate(context) {
             ]
         },
         outputChannel: vscode.window.createOutputChannel('Kotlin LSP'),
-        traceOutputChannel: vscode.window.createOutputChannel('Kotlin LSP Trace')
+        traceOutputChannel: vscode.window.createOutputChannel('Kotlin LSP Trace'),
+        revealOutputChannelOn: node_1.RevealOutputChannelOn.Error | node_1.RevealOutputChannelOn.Info | node_1.RevealOutputChannelOn.Warn,
+        errorHandler: {
+            error: (error, message, count) => {
+                console.error('Kotlin LSP error:', error);
+                return { action: node_1.ErrorAction.Continue };
+            },
+            closed: () => {
+                console.error('[KOTLIN LSP] Connection closed');
+                return { action: node_1.CloseAction.Restart };
+            }
+        }
     };
     // Create the language client
     client = new node_1.LanguageClient('kotlinLsp', 'Kotlin Language Server', serverOptions, clientOptions);

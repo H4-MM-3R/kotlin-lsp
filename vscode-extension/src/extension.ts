@@ -6,7 +6,10 @@ import {
     LanguageClientOptions,
     ServerOptions,
     TransportKind,
-    Executable
+    Executable,
+    RevealOutputChannelOn,
+    ErrorAction,
+    CloseAction
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
@@ -45,7 +48,18 @@ export function activate(context: vscode.ExtensionContext) {
             ]
         },
         outputChannel: vscode.window.createOutputChannel('Kotlin LSP'),
-        traceOutputChannel: vscode.window.createOutputChannel('Kotlin LSP Trace')
+        traceOutputChannel: vscode.window.createOutputChannel('Kotlin LSP Trace'),
+        revealOutputChannelOn: RevealOutputChannelOn.Error | RevealOutputChannelOn.Info | RevealOutputChannelOn.Warn,
+        errorHandler: {
+            error: (error, message, count) => {
+                console.error('Kotlin LSP error:', error);
+                return { action: ErrorAction.Continue };
+            },
+            closed: () => {
+                console.error('[KOTLIN LSP] Connection closed');
+                return { action: CloseAction.Restart };
+            }
+        }
     };
 
     // Create the language client
