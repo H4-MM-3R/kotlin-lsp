@@ -61,8 +61,6 @@ class GradleBuildSystem(
             }, OperationType.PROJECT_CONFIGURATION)
             .get()
 
-        println(stdout)
-
         val modules = mutableMapOf<String, SerializedModule>()
 
         // Register the JDK module

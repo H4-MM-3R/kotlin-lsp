@@ -20,6 +20,8 @@ import org.kotlinlsp.common.toLspRange
 import org.kotlinlsp.common.toOffset
 import org.kotlinlsp.common.warn
 import java.io.File
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.jar.JarFile
@@ -100,12 +102,18 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
 private fun tryDecompileJavaClass(path: Path): Location? {
     val outputDir = Files.createTempDirectory("fernflower_output").toFile()
     try {
+        val originalOut = System.out
+        val baos = ByteArrayOutputStream()
+        System.setOut(PrintStream(baos))
+
         val args = arrayOf(
             "-jpr=1",
             path.absolutePathString(),
             outputDir.absolutePath
         )
         ConsoleDecompiler.main(args)
+
+        System.setOut(originalOut)
 
         val outName = path.fileName.replaceExtensionWith(".java")
         val outPath = outputDir.toPath().resolve(outName)
