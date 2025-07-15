@@ -83,18 +83,25 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
     }
 
     val module = symbol.containingModule
-
     val provider =
         KotlinPackagePartProviderFactory.getInstance(ktFile.project).createPackagePartProvider(module.contentScope)
-    val names = provider.findPackageParts(packageName).map { it.replace("/", ".") }
     val psiFacade = JavaPsiFacade.getInstance(ktFile.project)
-    val psiClass = names.mapNotNull {
+
+    val candidateClasses = mutableListOf<com.intellij.psi.PsiClass>()
+
+    val packagePartNames = provider.findPackageParts(packageName).map { it.replace("/", ".") }
+    candidateClasses.addAll(packagePartNames.mapNotNull {
         psiFacade.findClass(it, module.contentScope)
-    }.find {
-        val fns = it.methods.mapNotNull { it.name }
-        val classes = it.innerClasses.mapNotNull { it.name }
-        val mainClass = it.name?.removeSuffix("Kt")
-        val props = it.fields.mapNotNull { it.name }
+    })
+
+    val fullClassName = if (packageName.isEmpty()) symbolName else "$packageName.$symbolName"
+    psiFacade.findClass(fullClassName, module.contentScope)?.let { candidateClasses.add(it) }
+
+    val psiClass = candidateClasses.find { psiClass ->
+        val fns = psiClass.methods.mapNotNull { it.name }
+        val classes = psiClass.innerClasses.mapNotNull { it.name }
+        val mainClass = psiClass.name?.removeSuffix("Kt")
+        val props = psiClass.fields.mapNotNull { it.name }
         val all = fns + props + classes + mainClass
         return@find all.contains(symbolName)
     } ?: return null
