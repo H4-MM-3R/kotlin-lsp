@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.platform.packages.KotlinPackagePartProviderFactory
 import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaClassSymbol
 import org.jetbrains.kotlin.analysis.decompiler.psi.KotlinClassFileDecompiler
 import org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem
 import org.jetbrains.kotlin.idea.references.mainReference
@@ -63,9 +64,24 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
     // TODO Test class methods, properties and types to see if they work, just tested with top level functions
     val element = ktFile.findElementAt(offset) ?: return null
     val ref = element.parent as? KtReferenceExpression ?: return null
-    val symbol = ref.mainReference.resolveToSymbol() as? KaCallableSymbol ?: return null
-    val packageName = symbol.callableId?.packageName?.asString() ?: return null
-    val callableName = symbol.callableId?.callableName?.asString() ?: return null
+    val symbol = ref.mainReference.resolveToSymbols().firstOrNull()
+    val packageName: String
+    val symbolName: String
+
+    when(symbol) {
+        is KaCallableSymbol -> {
+            packageName = symbol.callableId?.packageName?.asString() ?: return null
+            symbolName = symbol.callableId?.callableName?.asString() ?: return null
+        }
+        is KaClassSymbol -> {
+            packageName = symbol.classId?.packageFqName?.asString() ?: return null
+            symbolName = symbol.classId?.shortClassName?.asString() ?: return null
+        }
+        else -> {
+            return null
+        }
+    }
+
     val module = symbol.containingModule
 
     val provider =
@@ -76,7 +92,11 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
         psiFacade.findClass(it, module.contentScope)
     }.find {
         val fns = it.methods.mapNotNull { it.name }
-        return@find fns.contains(callableName)
+        val classes = it.innerClasses.mapNotNull { it.name }
+        val mainClass = it.name?.removeSuffix("Kt")
+        val props = it.fields.mapNotNull { it.name }
+        val all = fns + props + classes + mainClass
+        return@find all.contains(symbolName)
     } ?: return null
 
     // Decompile the kotlin .class file
