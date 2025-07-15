@@ -285,12 +285,12 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
         return project.read { hoverAction(ktFile, position) }
     }
 
-    fun goToDefinition(path: String, position: Position): Location? {
+    fun goToDefinition(path: String, position: Position): List<Location?>? {
         val ktFile = index.getOpenedKtFile(path) ?: return null
         return project.read { goToDefinitionAction(ktFile, position) }
     }
 
-    fun goToImplementation(path: String, position: Position): List<Location>? {
+    fun goToImplementation(path: String, position: Position): List<Location?>? {
         val ktFile = index.getOpenedKtFile(path) ?: return null
         return project.read { goToImplementationAction(ktFile, position) }
     }

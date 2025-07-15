@@ -155,16 +155,28 @@ class KotlinLanguageServer(
         return completedFuture(hover)
     }
 
-    override fun definition(params: DefinitionParams): CompletableFuture<Either<MutableList<out Location>, MutableList<out LocationLink>>?> {
-        val location =
-            analysisSession.goToDefinition(params.textDocument.uri, params.position) ?: return completedFuture(null)
-        return completedFuture(Either.forLeft(mutableListOf(location)))
+        override fun definition(params: DefinitionParams): CompletableFuture<Either<MutableList<out Location>, MutableList<out LocationLink>>?> {
+        val locations = analysisSession.goToDefinition(params.textDocument.uri, params.position)
+            ?: return completedFuture(null)
+        
+        val nonNullLocations = locations.filterNotNull().toMutableList()
+        if (nonNullLocations.isEmpty()) {
+            return completedFuture(null)
+        }
+        
+        return completedFuture(Either.forLeft(nonNullLocations))
     }
 
     override fun implementation(params: ImplementationParams): CompletableFuture<Either<List<Location>, List<LocationLink>>?> {
-        val locations =
-            analysisSession.goToImplementation(params.textDocument.uri, params.position) ?: return completedFuture(null)
-        return completedFuture(Either.forLeft(locations))
+        val locations = analysisSession.goToImplementation(params.textDocument.uri, params.position)
+            ?: return completedFuture(null)
+        
+        val nonNullLocations = locations.filterNotNull()
+        if (nonNullLocations.isEmpty()) {
+            return completedFuture(null)
+        }
+        
+        return completedFuture(Either.forLeft(nonNullLocations))
     }
 
     override fun codeAction(params: CodeActionParams): CompletableFuture<List<Either<Command, CodeAction>>> {

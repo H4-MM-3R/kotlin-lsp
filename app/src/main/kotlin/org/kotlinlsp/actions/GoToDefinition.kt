@@ -1,8 +1,11 @@
 package org.kotlinlsp.actions
 
 import com.intellij.psi.JavaPsiFacade
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
+import com.intellij.psi.ResolveResult
+import com.intellij.psi.impl.source.resolve.ResolveCache
 import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
@@ -14,54 +17,83 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassSymbol
 import org.jetbrains.kotlin.analysis.decompiler.psi.KotlinClassFileDecompiler
 import org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem
+import org.jetbrains.kotlin.idea.references.AbstractKtReference
+import org.jetbrains.kotlin.idea.references.KtReference
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtReferenceExpression
 import org.kotlinlsp.common.toLspRange
 import org.kotlinlsp.common.toOffset
 import org.kotlinlsp.common.warn
+import java.net.URI
 import java.io.File
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.jar.JarFile
 import kotlin.io.path.absolutePathString
 
-fun goToDefinitionAction(ktFile: KtFile, position: Position): Location? = analyze(ktFile) {
-    val offset = position.toOffset(ktFile)
-    val ref = ktFile.findReferenceAt(offset) ?: return null
-    val element = ref.resolve() ?: return tryResolveFromKotlinLibrary(ktFile, offset)
-    val file = element.containingFile ?: return null
 
-    // It comes from a java .class file
-    if(file.viewProvider.document == null) {
-        if(file.virtualFile.url.startsWith("jrt:/")) {
-            // Comes from JDK
-            val classFile = File.createTempFile("jrtClass", ".class")
-            classFile.writeBytes(file.virtualFile.contentsToByteArray())
-            val result = tryDecompileJavaClass(classFile.toPath())
-            classFile.delete()
-            return result
-        } else {
-            // Comes from JAR
-            val classFile = extractClassFromJar("${file.containingDirectory}/${file.containingFile.name}") ?: return null
-            val result = tryDecompileJavaClass(classFile.toPath())
-            classFile.delete()
-            return result
-        }
-    }
-    val range = element.textRange.toLspRange(file)
-    val folder = file.containingDirectory.toString().removePrefix("PsiDirectory:")
-
-    return Location().apply {
-        uri = "file://${folder}/${file.containingFile.name}"
-        setRange(range)
-    }
+fun KtReference.mutlipleResolve(): List<PsiElement?> {
+    val resolveResults: Array<ResolveResult> = this.multiResolve(false)
+    val psiResults = mutableListOf<PsiElement?>()
+    resolveResults.forEach { resolveResult -> resolveResult.element?.let { psiResults.add(it) }}
+    return psiResults
 }
 
-private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): Location? {
-    // TODO Test class methods, properties and types to see if they work, just tested with top level functions
+fun goToDefinitionAction(ktFile: KtFile, position: Position): List<Location?>? = analyze(ktFile) {
+    val offset = position.toOffset(ktFile)
+    val ref = ktFile.findReferenceAt(offset) as? KtReference ?: return null
+    val elements = ref.mutlipleResolve()
+    
+    // If no elements found, try library resolution
+    if (elements.isEmpty()) {
+        return tryResolveFromKotlinLibrary(ktFile, offset)
+    }
+    
+    val locations = mutableListOf<Location?>()
+    
+    for (element in elements) {
+        if (element == null) continue
+        
+        val file = element.containingFile ?: continue
+
+        // It comes from a java .class file
+        if(file.viewProvider.document == null) {
+            if(file.virtualFile.url.startsWith("jrt:/")) {
+                // Comes from JDK
+                val classFile = File.createTempFile("jrtClass", ".class")
+                classFile.writeBytes(file.virtualFile.contentsToByteArray())
+                val result = tryDecompileJavaClass(classFile.toPath())
+                classFile.delete()
+                locations.add(result)
+            } else {
+                // Comes from JAR
+                val classFile = extractClassFromJar("${file.containingDirectory}/${file.containingFile.name}")
+                if (classFile != null) {
+                    val result = tryDecompileJavaClass(classFile.toPath())
+                    classFile.delete()
+                    locations.add(result)
+                }
+            }
+        } else {
+            // Regular source file
+            val range = element.textRange.toLspRange(file)
+            val folder = file.containingDirectory.toString().removePrefix("PsiDirectory:")
+
+            locations.add(Location().apply {
+                uri = "file://${folder}/${file.containingFile.name}"
+                setRange(range)
+            })
+        }
+    }
+    
+    return locations
+}
+
+private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): List<Location?>? {
     val element = ktFile.findElementAt(offset) ?: return null
     val ref = element.parent as? KtReferenceExpression ?: return null
     val symbol = ref.mainReference.resolveToSymbols().firstOrNull()
@@ -86,14 +118,14 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
     val provider =
         KotlinPackagePartProviderFactory.getInstance(ktFile.project).createPackagePartProvider(module.contentScope)
     val psiFacade = JavaPsiFacade.getInstance(ktFile.project)
-
+    
     val candidateClasses = mutableListOf<com.intellij.psi.PsiClass>()
-
+    
     val packagePartNames = provider.findPackageParts(packageName).map { it.replace("/", ".") }
     candidateClasses.addAll(packagePartNames.mapNotNull {
         psiFacade.findClass(it, module.contentScope)
     })
-
+    
     val fullClassName = if (packageName.isEmpty()) symbolName else "$packageName.$symbolName"
     psiFacade.findClass(fullClassName, module.contentScope)?.let { candidateClasses.add(it) }
 
@@ -117,13 +149,13 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
     tmpFile.writeText(decompiledContent)
     tmpFile.setWritable(false)
 
-    return Location().apply {
+    return listOf(Location().apply {
         uri = "file://${tmpFile.absolutePath}"
         range = Range().apply {
             start = Position(0, 0)  // TODO Set correct position
             end = Position(0, 1)
         }
-    }
+    })
 }
 
 private fun tryDecompileJavaClass(path: Path): Location? {
