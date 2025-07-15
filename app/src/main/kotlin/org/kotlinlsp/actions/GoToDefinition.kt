@@ -84,7 +84,7 @@ fun goToDefinitionAction(ktFile: KtFile, position: Position): List<Location?>? =
             val folder = file.containingDirectory.toString().removePrefix("PsiDirectory:")
 
             locations.add(Location().apply {
-                uri = "file://${folder}/${file.containingFile.name}"
+                uri = file.virtualFile.url
                 setRange(range)
             })
         }
@@ -150,7 +150,7 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
     tmpFile.setWritable(false)
 
     return listOf(Location().apply {
-        uri = "file://${tmpFile.absolutePath}"
+        uri = Paths.get(tmpFile.absolutePath).toUri().toString()
         range = Range().apply {
             start = Position(0, 0)  // TODO Set correct position
             end = Position(0, 1)
@@ -180,7 +180,7 @@ private fun tryDecompileJavaClass(path: Path): Location? {
         outPath.toFile().setWritable(false)
 
         return Location().apply {
-            uri = "file://${outPath.absolutePathString()}"
+            uri = Paths.get(outPath.absolutePathString()).toUri().toString()
             range = Range().apply {
                 start = Position(0, 0)  // TODO Set correct position
                 end = Position(0, 1)
