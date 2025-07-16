@@ -3,6 +3,7 @@
   "displayName": "Kotlin Language Server",
   "description": "Kotlin language support powered by Kotlin Analysis API",
   "version": "1.0.0",
+  "publisher": "hemram",
   "repository": {
       "type": "git",
       "url": "https://github.com/h4-mm-3r/kotlin-lsp"
@@ -20,9 +21,21 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onLanguage:kotlin"
+      "onLanguage:kotlin"
   ],
   "contributes": {
+    "commands": [
+      {
+        "command": "kotlinLsp.restart",
+        "title": "Kotlin LSP: Restart LSP",
+        "category": "Kotlin LSP"
+      },
+      {
+          "command": "kotlinLsp.startTcpServer",
+          "title": "Kotlin LSP: Start TCP Server",          
+          "category": "Kotlin LSP"
+      }
+    ],
     "languages": [
       {
         "id": "kotlin",
@@ -55,12 +68,10 @@
         },
         "kotlinLsp.serverPath": {
           "type": "string",
-          "default": null,
           "description": "Path to the Kotlin LSP executable. If not set, will look for kotlin-lsp in PATH or use bundled version."
         },
         "kotlinLsp.javaHome": {
           "type": "string",
-          "default": null,
           "description": "Java home path for running the LSP server"
         },
         "kotlinLsp.trace.server": {
@@ -70,7 +81,7 @@
             "messages",
             "verbose"
           ],
-          "default": "off",
+          "default": "verbose",
           "description": "Traces the communication between VS Code and the language server."
         }
       }

@@ -9,16 +9,17 @@ import {
     Executable,
     RevealOutputChannelOn,
     ErrorAction,
-    CloseAction
+    CloseAction,
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-    const config = vscode.workspace.getConfiguration('kotlinLsp');
+    
+    const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration('kotlinLsp');
     
     if (!config.get('enabled')) {
-        console.log('Kotlin LSP is disabled');
+        vscode.window.showInformationMessage('Kotlin LSP is disabled');
         return;
     }
 
@@ -49,17 +50,24 @@ export function activate(context: vscode.ExtensionContext) {
         },
         outputChannel: vscode.window.createOutputChannel('Kotlin LSP'),
         traceOutputChannel: vscode.window.createOutputChannel('Kotlin LSP Trace'),
+        diagnosticPullOptions: {
+            onChange: true,
+        },
+        uriConverters: {
+            code2Protocol: uri => uri.toString(true),
+            protocol2Code: path => vscode.Uri.parse(path) 
+        },
         revealOutputChannelOn: RevealOutputChannelOn.Error | RevealOutputChannelOn.Info | RevealOutputChannelOn.Warn,
         errorHandler: {
-            error: (error, message, count) => {
-                console.error('Kotlin LSP error:', error);
+            error: (error, _message, _count) => {
+                vscode.window.showErrorMessage(`[KOTLIN LSP] error:${error}`);
                 return { action: ErrorAction.Continue };
             },
             closed: () => {
-                console.error('[KOTLIN LSP] Connection closed');
+                vscode.window.showErrorMessage('[KOTLIN LSP] Connection closed');
                 return { action: CloseAction.Restart };
-            }
-        }
+            },
+        },
     };
 
     // Create the language client
@@ -82,21 +90,19 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate(): Thenable<void> | undefined {
-    if (!client) {
-        return undefined;
-    }
-    return client.stop();
+    if (!client) return undefined;
+    if (client.state === 2) return client.stop();
+    return undefined;
 }
 
 function getServerPath(config: vscode.WorkspaceConfiguration): string | null {
-    // Check user-configured path first
     const configuredPath = config.get<string>('serverPath');
-    if (configuredPath && fs.existsSync(configuredPath)) {
-        return configuredPath;
+    if (configuredPath) {
+        if (fs.existsSync(configuredPath)) return configuredPath;
     }
 
     // Look for bundled server in extension directory
-    const extensionPath = vscode.extensions.getExtension('your-publisher.kotlin-lsp-vscode')?.extensionPath;
+    const extensionPath = vscode.extensions.getExtension('hemram.kotlin-lsp-vscode')?.extensionPath;
     if (extensionPath) {
         const bundledServerPath = path.join(extensionPath, 'server', 'bin', 'kotlin-lsp');
         if (fs.existsSync(bundledServerPath)) {
@@ -146,6 +152,8 @@ function createServerOptions(serverPath: string, config: vscode.WorkspaceConfigu
         command: command,
         transport: TransportKind.stdio,
         options: {
+            // Work-around Node 18+ breaking change on Windows: spawning .bat/.cmd requires shell:true
+            ...(isWindows ? { shell: true } : {}),
             env: {
                 ...process.env,
                 ...(javaHome && { JAVA_HOME: javaHome })
@@ -158,10 +166,11 @@ function createServerOptions(serverPath: string, config: vscode.WorkspaceConfigu
 
 async function startServer() {
     try {
+        vscode.window.showInformationMessage('🔄 Starting Kotlin LSP server...');
         await client.start();
-        vscode.window.showInformationMessage('Kotlin LSP server started successfully');
+        vscode.window.showInformationMessage('✅ Kotlin LSP server started successfully');
     } catch (error) {
-        vscode.window.showErrorMessage(`Failed to start Kotlin LSP server: ${error}`);
+        vscode.window.showErrorMessage(`❌ Failed to start Kotlin LSP server: ${error}`);
     }
 }
 
