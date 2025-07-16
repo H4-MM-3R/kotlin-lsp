@@ -280,30 +280,44 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
         index.close()
     }
 
+    private fun getKtFile(path: String): KtFile? {
+        val openedFile = index.getOpenedKtFile(path)
+        if (openedFile != null) {
+            return openedFile
+        }
+
+        val virtualFile = project.read { 
+            VirtualFileManager.getInstance().findFileByUrl(path) 
+        } ?: return null
+        
+        val result = index.getKtFile(virtualFile)
+        return result
+    }
+
     fun hover(path: String, position: Position): Pair<String, Range>? {
-        val ktFile = index.getOpenedKtFile(path) ?: return null
+        val ktFile = getKtFile(path) ?: return null
         return project.read { hoverAction(ktFile, position) }
     }
 
     fun goToDefinition(path: String, position: Position): List<Location?>? {
-        val ktFile = index.getOpenedKtFile(path) ?: return null
+        val ktFile = getKtFile(path) ?: return null
         return project.read { goToDefinitionAction(ktFile, position) }
     }
 
     fun goToImplementation(path: String, position: Position): List<Location?>? {
-        val ktFile = index.getOpenedKtFile(path) ?: return null
+        val ktFile = getKtFile(path) ?: return null
         return project.read { goToImplementationAction(ktFile, position) }
     }
 
     fun autocomplete(path: String, position: Position): List<CompletionItem> {
-        val ktFile = index.getOpenedKtFile(path) ?: return emptyList()
+        val ktFile = getKtFile(path) ?: return emptyList()
         val offset = position.toOffset(ktFile)
 
         return project.read { autocompleteAction(ktFile, offset, index) }.toList()
     }
 
     fun getCodeActions(path: String, range: Range, diagnostics: List<Diagnostic>): List<CodeAction> {
-        val ktFile = index.getOpenedKtFile(path) ?: return emptyList()
+        val ktFile = getKtFile(path) ?: return emptyList()
 
         return project.read {
             val context = CodeActionContext(ktFile, range, diagnostics, path, index)
@@ -312,17 +326,17 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     }
 
     fun findReferences(path: String, position: Position): List<Location>? {
-        val ktFile = index.getOpenedKtFile(path) ?: return null
+        val ktFile = getKtFile(path) ?: return null
         return project.read { findReferencesAction(ktFile, position, index) }
     }
 
     fun documentSymbols(path: String): List<DocumentSymbol> {
-        val ktFile = index.getOpenedKtFile(path) ?: return emptyList()
+        val ktFile = getKtFile(path) ?: return emptyList()
         return project.read { documentSymbolsAction(ktFile) }
     }
 
     fun rename(path: String, position: Position, newName: String): WorkspaceEdit? {
-        val ktFile = index.getOpenedKtFile(path) ?: return null
+        val ktFile = getKtFile(path) ?: return null
         return project.read { renameAction(ktFile, position, newName, index) }
     }
 }
