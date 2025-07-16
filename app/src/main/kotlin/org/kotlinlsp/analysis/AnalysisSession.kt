@@ -255,7 +255,12 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
                     val startOffset = it.range.start.toOffset(ktFile)
                     val endOffset = it.range.end.toOffset(ktFile)
 
-                    doc.replaceString(startOffset, endOffset, it.text)
+                    // VS Code usually sends edits with CRLF ("\r\n"). The PSI Document counts
+                    // offsets based on LF ("\n") line delimiters, and StringUtil's line/column
+                    // helpers do the same.  Converting to LF before applying keeps offsets
+                    // consistent and prevents losing or mis-placing newlines.
+                    val normalizedText = it.text.replace("\r\n", "\n")
+                    doc.replaceString(startOffset, endOffset, normalizedText)
                     psiDocumentManager.commitDocument(doc)
                     ktFile.onContentReload()
                 }, "onChangeFile", null)
