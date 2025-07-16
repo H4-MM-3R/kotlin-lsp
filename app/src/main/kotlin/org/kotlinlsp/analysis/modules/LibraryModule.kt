@@ -116,7 +116,7 @@ private fun getVirtualFileForLibraryRoot(
     environment: CoreApplicationEnvironment,
     project: Project
 ): VirtualFile? {
-    val pathString = root.absolutePathString()
+    var pathString = root.absolutePathString()
 
     // .jar or .klib files
     if (pathString.endsWith(JAR_PROTOCOL) || pathString.endsWith(KLIB_FILE_EXTENSION)) {
@@ -124,9 +124,12 @@ private fun getVirtualFileForLibraryRoot(
     }
 
     // JDK classes
-    if (pathString.contains(JAR_SEPARATOR)) {
+    if (pathString.contains("!")) {
+        if(!pathString.contains(JAR_SEPARATOR)) {
+            pathString = pathString.replace("\\", "/")
+        }
         val (libHomePath, pathInImage) = CoreJrtFileSystem.splitPath(pathString)
-        val adjustedPath = libHomePath + JAR_SEPARATOR + "modules/$pathInImage"
+        val adjustedPath = "$libHomePath!/modules/$pathInImage"
         return project.read { environment.jrtFileSystem?.findFileByPath(adjustedPath) }
     }
 
