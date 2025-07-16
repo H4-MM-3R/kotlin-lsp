@@ -46,6 +46,8 @@ import org.kotlinlsp.actions.goToDefinitionAction
 import org.kotlinlsp.actions.goToImplementationAction
 import org.kotlinlsp.actions.hoverAction
 import org.kotlinlsp.actions.renameAction
+import org.kotlinlsp.actions.semanticHighlightingAction
+import org.kotlinlsp.actions.semanticHighlightingRangeAction
 import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.analysis.registration.Registrar
 import org.kotlinlsp.analysis.registration.lspPlatform
@@ -238,7 +240,7 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
                 return@analyze lspDiagnostics
             }
         }
-        notifier.onDiagnostics(PublishDiagnosticsParams("file://${ktFile.virtualFilePath}", syntaxDiagnostics + analysisDiagnostics))
+        notifier.onDiagnostics(PublishDiagnosticsParams(ktFile.virtualFile.url.normalizeUri(), syntaxDiagnostics + analysisDiagnostics))
         logProfileInfo()
     }
 
@@ -338,5 +340,15 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     fun rename(path: String, position: Position, newName: String): WorkspaceEdit? {
         val ktFile = getKtFile(path) ?: return null
         return project.read { renameAction(ktFile, position, newName, index) }
+    }
+
+    fun semanticTokens(path: String): SemanticTokens? {
+        val ktFile = getKtFile(path) ?: return null
+        return project.read { semanticHighlightingAction(ktFile) }
+    }
+
+    fun semanticTokensRange(path: String, range: Range): SemanticTokens? {
+        val ktFile = getKtFile(path) ?: return null
+        return project.read { semanticHighlightingRangeAction(ktFile, range) }
     }
 }

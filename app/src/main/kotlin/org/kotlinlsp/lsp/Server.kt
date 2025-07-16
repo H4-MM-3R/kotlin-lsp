@@ -68,6 +68,22 @@ class KotlinLanguageServer(
             referencesProvider = Either.forLeft(true)
             documentSymbolProvider = Either.forLeft(true)
             renameProvider = Either.forLeft(true)
+            semanticTokensProvider = SemanticTokensWithRegistrationOptions().apply {
+                legend = SemanticTokensLegend().apply {
+                    tokenTypes = listOf(
+                        "namespace", "class", "enum", "interface", "struct", "typeParameter", "type",
+                        "parameter", "variable", "property", "enumMember", "decorator", "event",
+                        "function", "method", "macro", "label", "comment", "string", "keyword",
+                        "number", "regexp", "operator"
+                    )
+                    tokenModifiers = listOf(
+                        "declaration", "definition", "readonly", "static", "deprecated", "abstract",
+                        "async", "modification", "documentation", "defaultLibrary"
+                    )
+                }
+                full = Either.forLeft(true)
+                range = Either.forLeft(true)
+            }
         }
         val serverInfo = ServerInfo().apply {
             name = "kotlin-lsp"
@@ -205,5 +221,15 @@ class KotlinLanguageServer(
     override fun rename(params: RenameParams): CompletableFuture<WorkspaceEdit?> {
         val workspaceEdit = analysisSession.rename(params.textDocument.uri, params.position, params.newName)
         return completedFuture(workspaceEdit)
+    }
+
+    override fun semanticTokensFull(params: SemanticTokensParams): CompletableFuture<SemanticTokens?> {
+        val tokens = analysisSession.semanticTokens(params.textDocument.uri)
+        return completedFuture(tokens)
+    }
+
+    override fun semanticTokensRange(params: SemanticTokensRangeParams): CompletableFuture<SemanticTokens?> {
+        val tokens = analysisSession.semanticTokensRange(params.textDocument.uri, params.range)
+        return completedFuture(tokens)
     }
 }

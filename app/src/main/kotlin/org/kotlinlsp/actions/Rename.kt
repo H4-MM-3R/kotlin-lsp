@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.kotlinlsp.analysis.services.DirectInheritorsProvider
 import org.kotlinlsp.common.toLspRange
 import org.kotlinlsp.common.toOffset
+import org.kotlinlsp.common.normalizeUri
 import org.kotlinlsp.index.Index
 import org.kotlinlsp.index.db.Declaration
 import org.kotlinlsp.index.db.adapters.prefixSearch
@@ -61,7 +62,7 @@ fun renameAction(ktFile: KtFile, position: Position, newName: String, index: Ind
                 try {
                     val fileEdits = findRenameOccurrencesInFile(file, targetSymbolPointer, newName)
                     if (fileEdits.isNotEmpty()) {
-                        documentChanges[file.virtualFile.url] = fileEdits.toMutableList()
+                        documentChanges[file.virtualFile.url.normalizeUri()] = fileEdits.toMutableList()
                     }
                 } catch (e: Exception) {
                     // Silently ignore resolution errors for robustness
@@ -74,10 +75,11 @@ fun renameAction(ktFile: KtFile, position: Position, newName: String, index: Ind
     try {
         val implementations = findImplementations(ktFile, ktElement, targetSymbolPointer, newName)
         implementations.forEach { (fileUrl, edits) ->
-            if (documentChanges.containsKey(fileUrl)) {
-                documentChanges[fileUrl]!!.addAll(edits)
+            val normalizedFileUrl = fileUrl.normalizeUri()
+            if (documentChanges.containsKey(normalizedFileUrl)) {
+                documentChanges[normalizedFileUrl]!!.addAll(edits)
             } else {
-                documentChanges[fileUrl] = edits.toMutableList()
+                documentChanges[normalizedFileUrl] = edits.toMutableList()
             }
         }
     } catch (e: Exception) {
@@ -153,7 +155,7 @@ private fun findImplementations(ktFile: KtFile, ktElement: KtElement, targetSymb
                             this.newText = newName
                         }
                         
-                        val fileUrl = declaration.containingFile.virtualFile.url
+                        val fileUrl = declaration.containingFile.virtualFile.url.normalizeUri()
                         if (!documentChanges.containsKey(fileUrl)) {
                             documentChanges[fileUrl] = mutableListOf()
                         }

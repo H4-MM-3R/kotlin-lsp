@@ -22,7 +22,7 @@ It's developed as part of the [Kotlin LSP Project](https://kotlinlang.org/docs/g
 - ✅ Go to References
 - ✅ Rename Refactoring
 - ✅ Document Symbols
-- [ ] Semantic Highlighting
+- ✅ Semantic Highlighting
 - [ ] Signature Help
 - [ ] Inlay Hints
 - [ ] Formatting
