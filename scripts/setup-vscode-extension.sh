@@ -18,7 +18,7 @@ function check_dependency() {
     if ! command -v "$1" &> /dev/null; then
         echo "❌ Error: Required dependency '$1' is not installed or not in your PATH."
         if [ "$1" = "vsce" ]; then
-            echo " Please install it by running 'npm install -g vsce'."
+            echo " Please install it by running 'npm install -g @vscode/vsce'."
             exit 1
         fi
     fi
