@@ -13,6 +13,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletableFuture.completedFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
+import java.net.URI
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
 interface KotlinLanguageServerNotifier {
@@ -71,7 +73,8 @@ class KotlinLanguageServer(
             version = getLspVersion()
         }
 
-        rootPath = params.workspaceFolders.first().uri.removePrefix("file://")
+        val workspaceUri = URI(params.workspaceFolders.first().uri)
+        rootPath = Paths.get(workspaceUri).toString()
 
         return completedFuture(InitializeResult(capabilities, serverInfo))
     }
