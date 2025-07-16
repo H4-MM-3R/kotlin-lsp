@@ -62,7 +62,7 @@ class KotlinLanguageServer(
             textDocumentSync = Either.forLeft(TextDocumentSyncKind.Incremental)
             hoverProvider = Either.forLeft(true)
             definitionProvider = Either.forLeft(true)
-            completionProvider = CompletionOptions(false, listOf("."))
+            // completionProvider = CompletionOptions(false, listOf("."))
             implementationProvider = Either.forLeft(true)
             codeActionProvider = Either.forLeft(true)
             referencesProvider = Either.forLeft(true)
@@ -148,10 +148,10 @@ class KotlinLanguageServer(
 
     }
 
-    override fun completion(params: CompletionParams): CompletableFuture<Either<MutableList<CompletionItem>, CompletionList>> {
-        val completions = analysisSession.autocomplete(params.textDocument.uri, params.position)
-        return completedFuture(Either.forRight(CompletionList(false, completions)))
-    }
+    // override fun completion(params: CompletionParams): CompletableFuture<Either<MutableList<CompletionItem>, CompletionList>> {
+    //     val completions = analysisSession.autocomplete(params.textDocument.uri, params.position)
+    //     return completedFuture(Either.forRight(CompletionList(false, completions)))
+    // }
 
     override fun connect(params: LanguageClient) {
         client = params
