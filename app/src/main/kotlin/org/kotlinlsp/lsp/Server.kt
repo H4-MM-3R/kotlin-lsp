@@ -9,6 +9,7 @@ import org.kotlinlsp.analysis.AnalysisSessionNotifier
 import org.kotlinlsp.common.getLspVersion
 import org.kotlinlsp.common.info
 import org.kotlinlsp.common.setupLogger
+import org.kotlinlsp.common.normalizeUri
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletableFuture.completedFuture
 import java.util.concurrent.Executors
@@ -105,7 +106,7 @@ class KotlinLanguageServer(
     }
 
     override fun didChange(params: DidChangeTextDocumentParams) {
-        val uri = params.textDocument.uri
+        val uri = params.textDocument.uri.normalizeUri()
         analysisSession.editFile(uri, params.textDocument.version, params.contentChanges)
 
         // Debounce the linting so it is not triggered on every keystroke

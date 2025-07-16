@@ -125,7 +125,7 @@ private fun findReferencesInFile(ktFile: KtFile, targetSymbolPointer: KaSymbolPo
                 val resolvedSymbol = refExpr.mainReference.resolveToSymbol() as? KaDeclarationSymbol
                 if (resolvedSymbol != null && resolvedSymbol == targetSymbol) {
                     references.add(Location().apply {
-                        uri = ktFile.virtualFile.url
+                        uri = ktFile.virtualFile.url.normalizeUri()
                         range = refExpr.textRange.toLspRange(ktFile)
                     })
                 }
