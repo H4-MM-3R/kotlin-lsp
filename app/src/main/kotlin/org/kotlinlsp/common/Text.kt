@@ -6,6 +6,8 @@ import com.intellij.psi.PsiFile
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
 import org.jetbrains.kotlin.psi.KtElement
+import java.nio.file.Paths
+import java.net.URI
 import org.jetbrains.kotlin.psi.KtFile
 
 fun Position.toOffset(ktFile: KtFile): Int = StringUtil.lineColToOffset(ktFile.text, line, character)
@@ -36,8 +38,40 @@ fun getElementRange(ktFile: KtFile, element: KtElement): Range {
 }
 
 fun Int.toLspPosition(ktFile: KtFile): Position {
-    var lineColumn = StringUtil.offsetToLineColumn(ktFile.text, this)
+    val lineColumn = StringUtil.offsetToLineColumn(ktFile.text, this)
     return Position(lineColumn.line, lineColumn.column)
 }
 
 fun Int.toOffset(ktFile: KtFile): Int = this
+
+fun String.normalizeUri(): String {
+    return try {
+        val uri = URI(this)
+        if (uri.scheme == "file") {
+            val raw = Paths.get(uri).toUri().toString()
+            raw.fixWindowsFileUri()
+        } else {
+            this
+        }
+    } catch (e: Exception) {
+        info("normalizeUri failed on ‘$this’, returning original. reason: ${e.message}")
+        this
+    }
+}
+
+private fun String.fixWindowsFileUri(): String {
+    if (!startsWith("file://") || startsWith("file:///")) return this
+
+    val pathPart = removePrefix("file://")
+    return when {
+        pathPart.matches("^[a-zA-Z]:/.*".toRegex()) ->
+            "file:///$pathPart"
+
+        pathPart.matches("^[a-zA-Z]/.*".toRegex()) -> {
+            val drive = pathPart.first()
+            val rest  = pathPart.drop(1)
+            "file:///$drive:$rest"
+        }
+        else -> this
+    }
+}

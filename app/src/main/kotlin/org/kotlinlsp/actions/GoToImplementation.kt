@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.analysis.services.DirectInheritorsProvider
 import org.kotlinlsp.common.toLspRange
+import org.kotlinlsp.common.normalizeUri
 import org.kotlinlsp.common.toOffset
 
 fun goToImplementationAction(ktFile: KtFile, position: Position): List<Location>? {
@@ -76,7 +77,7 @@ fun goToImplementationAction(ktFile: KtFile, position: Position): List<Location>
 
     return inheritors.map {
         Location().apply {
-            uri = it.containingFile.virtualFile.url
+            uri = it.containingFile.virtualFile.url.normalizeUri()
             range = it.textRange.toLspRange(it.containingFile)
         }
     }

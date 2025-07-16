@@ -33,6 +33,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.jar.JarFile
+import org.kotlinlsp.common.normalizeUri
 import kotlin.io.path.absolutePathString
 
 
@@ -81,10 +82,9 @@ fun goToDefinitionAction(ktFile: KtFile, position: Position): List<Location?>? =
         } else {
             // Regular source file
             val range = element.textRange.toLspRange(file)
-            val folder = file.containingDirectory.toString().removePrefix("PsiDirectory:")
 
             locations.add(Location().apply {
-                uri = file.virtualFile.url
+                uri = file.virtualFile.url.normalizeUri()
                 setRange(range)
             })
         }
@@ -150,7 +150,7 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
     tmpFile.setWritable(false)
 
     return listOf(Location().apply {
-        uri = Paths.get(tmpFile.absolutePath).toUri().toString()
+        uri = Paths.get(tmpFile.absolutePath).toUri().toString().normalizeUri()
         range = Range().apply {
             start = Position(0, 0)  // TODO Set correct position
             end = Position(0, 1)
@@ -180,7 +180,7 @@ private fun tryDecompileJavaClass(path: Path): Location? {
         outPath.toFile().setWritable(false)
 
         return Location().apply {
-            uri = Paths.get(outPath.absolutePathString()).toUri().toString()
+            uri = Paths.get(outPath.absolutePathString()).toUri().toString().normalizeUri()
             range = Range().apply {
                 start = Position(0, 0)  // TODO Set correct position
                 end = Position(0, 1)

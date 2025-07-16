@@ -19,6 +19,7 @@ import org.kotlinlsp.index.Index
 import org.kotlinlsp.index.db.Declaration
 import org.kotlinlsp.index.db.adapters.prefixSearch
 import kotlinx.coroutines.*
+import org.kotlinlsp.common.normalizeUri
 import java.util.concurrent.ConcurrentLinkedQueue
 
 private data class SymbolData(
@@ -140,7 +141,7 @@ private fun findReferencesInFile(ktFile: KtFile, targetSymbolPointer: KaSymbolPo
                 val declSymbol = decl.symbol as? KaDeclarationSymbol
                 if (declSymbol != null && declSymbol == targetSymbol) {
                     references.add(Location().apply {
-                        uri = ktFile.virtualFile.url
+                        uri = ktFile.virtualFile.url.normalizeUri()
                         range = decl.textRange.toLspRange(ktFile)
                     })
                 }
