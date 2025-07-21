@@ -8,6 +8,10 @@ import org.kotlinlsp.common.read
 import org.kotlinlsp.index.Command
 import org.kotlinlsp.index.IndexNotifier
 import org.kotlinlsp.index.db.Database
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import java.util.concurrent.atomic.AtomicInteger
 
 interface WorkerThreadNotifier: IndexNotifier {
     fun onSourceFileScanningFinished()
@@ -19,45 +23,68 @@ class WorkerThread(
     private val notifier: WorkerThreadNotifier
 ): Runnable {
     private val workQueue = WorkQueue<Command>()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val commandChannel = Channel<Command>(UNLIMITED)
 
     override fun run() {
-        var scanCount = 0
-        var indexCount = 0
+        runBlocking {
+            val scanCount = AtomicInteger(0)
+            val indexCount = AtomicInteger(0)
 
-        while(true) {
-            when(val command = workQueue.take()) {
-                is Command.Stop -> break
-                is Command.ScanSourceFile -> {
-                    if(!command.virtualFile.url.startsWith("file://")) return
+            // Launch parallel command processors
+            val processors: List<Job> = List(4) { processorId ->
+                scope.launch {
+                    for (command in commandChannel) {
+                        when(command) {
+                            is Command.Stop -> {
+                                commandChannel.close()
+                                return@launch
+                            }
+                            is Command.ScanSourceFile -> {
+                                if(!command.virtualFile.url.startsWith("file://")) continue
 
-                    val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
-                    scanKtFile(project, ktFile, db)
-                    scanCount ++
-                }
-                is Command.IndexFile -> {
-                    if(command.virtualFile.url.startsWith("file://")) {
-                        val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
-                        indexKtFile(project, ktFile, db)
-                    } else {
-                        indexClassFile(project, command.virtualFile, db)
+                                val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
+                                scanKtFile(project, ktFile, db)
+                                scanCount.incrementAndGet()
+                            }
+                            is Command.IndexFile -> {
+                                if(command.virtualFile.url.startsWith("file://")) {
+                                    val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
+                                    indexKtFile(project, ktFile, db)
+                                } else {
+                                    indexClassFile(project, command.virtualFile, db)
+                                }
+                                indexCount.incrementAndGet()
+                            }
+                            is Command.IndexModifiedFile -> {
+                                info("Indexing modified file: ${command.ktFile.virtualFile.name}")
+                                indexKtFile(project, command.ktFile, db)
+                            }
+                            is Command.IndexingFinished -> {
+                                info("Background indexing finished!, ${indexCount.get()} files!")
+                                notifier.onBackgroundIndexFinished()
+                            }
+                            is Command.SourceScanningFinished -> {
+                                info("Source file scanning finished!, ${scanCount.get()} files!")
+                                notifier.onSourceFileScanningFinished()
+                            }
+                        }
                     }
-                    indexCount ++
-                }
-                is Command.IndexModifiedFile -> {
-                    info("Indexing modified file: ${command.ktFile.virtualFile.name}")
-                    indexKtFile(project, command.ktFile, db)
-                }
-                is Command.IndexingFinished -> {
-                    // TODO Should remove in this point files which do not exist anymore
-                    info("Background indexing finished!, $indexCount files!")
-                    notifier.onBackgroundIndexFinished()
-                }
-                Command.SourceScanningFinished -> {
-                    // TODO Should remove in this point files which do not exist anymore
-                    info("Source file scanning finished!, $scanCount files!")
-                    notifier.onSourceFileScanningFinished()
                 }
             }
+
+            // Main loop to feed commands to processors
+            while(true) {
+                val command = workQueue.take()
+                if (command is Command.Stop) {
+                    commandChannel.send(command)
+                    break
+                }
+                commandChannel.send(command)
+            }
+
+            // Wait for all processors to finish
+            processors.joinAll()
         }
     }
 
