@@ -2,10 +2,12 @@ package org.kotlinlsp.index.db
 
 import org.kotlinlsp.common.getCachePath
 import org.kotlinlsp.common.info
+import org.kotlinlsp.common.warn
 import org.kotlinlsp.index.db.adapters.DatabaseAdapter
 import org.kotlinlsp.index.db.adapters.RocksDBAdapter
 import org.kotlinlsp.index.db.adapters.get
 import org.kotlinlsp.index.db.adapters.put
+import org.rocksdb.RocksDBException
 import java.io.File
 import kotlin.io.path.absolutePathString
 
@@ -19,24 +21,32 @@ class Database(rootFolder: String) {
     val declarationsDb: DatabaseAdapter
 
     init {
-        var projectDb = RocksDBAdapter(cachePath.resolve("project"))
-        val schemaVersion = projectDb.get<Int>(VERSION_KEY)
+        try {
+            var projectDb = RocksDBAdapter(cachePath.resolve("project"))
+            val schemaVersion = projectDb.get<Int>(VERSION_KEY)
 
-        if(schemaVersion == null || schemaVersion != CURRENT_SCHEMA_VERSION) {
+            if(schemaVersion == null || schemaVersion != CURRENT_SCHEMA_VERSION) {
+                // Schema version mismatch, wipe the db
+                info("Index DB schema version mismatch, recreating!")
+                projectDb.close()
+                deleteAll()
 
-            // Schema version mismatch, wipe the db
-            info("Index DB schema version mismatch, recreating!")
+                projectDb = RocksDBAdapter(cachePath.resolve("project"))
+                projectDb.put(VERSION_KEY, CURRENT_SCHEMA_VERSION)
+            }
+
+            filesDb = RocksDBAdapter(cachePath.resolve("files"))
+            packagesDb = RocksDBAdapter(cachePath.resolve("packages"))
+            declarationsDb = RocksDBAdapter(cachePath.resolve("declarations"))
             projectDb.close()
-            deleteAll()
-
-            projectDb = RocksDBAdapter(cachePath.resolve("project"))
-            projectDb.put(VERSION_KEY, CURRENT_SCHEMA_VERSION)
+        } catch (e: RocksDBException) {
+            warn("Failed to initialize database: ${e.message}")
+            warn("This might be due to another Kotlin LSP instance running. Please ensure only one instance is active.")
+            throw e
+        } catch (e: Exception) {
+            warn("Unexpected error during database initialization: ${e.message}")
+            throw e
         }
-
-        filesDb = RocksDBAdapter(cachePath.resolve("files"))
-        packagesDb = RocksDBAdapter(cachePath.resolve("packages"))
-        declarationsDb = RocksDBAdapter(cachePath.resolve("declarations"))
-        projectDb.close()
     }
 
     fun close() {

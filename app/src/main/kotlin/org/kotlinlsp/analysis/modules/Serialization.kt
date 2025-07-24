@@ -6,6 +6,7 @@ import com.intellij.openapi.project.Project
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreApplicationEnvironment
 import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.config.LanguageVersion
+import org.kotlinlsp.common.warn
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 
@@ -74,13 +75,44 @@ fun buildModulesGraph(
     project: Project
 ): List<Module> {
     val builtModules = mutableMapOf<String, Module>()
+    val visited = mutableSetOf<String>()
 
-    fun build(id: String): Module {
+    fun build(id: String, depth: Int = 0): Module {
         if (builtModules.containsKey(id)) return builtModules[id]!!
-        val serialized = moduleMap[id]!!
-        val deps = serialized.dependencies.map { build(it) }
+
+        if (visited.contains(id)) {
+            warn("Circular dependency detected for module: $id. Breaking cycle.")
+            return builtModules.getOrPut(id) {
+                val serialized = moduleMap[id] ?: throw IllegalStateException("Module not found: $id")
+                if (serialized.isSource) {
+                    SourceModule(
+                        id = id,
+                        kotlinVersion = LanguageVersion.fromVersionString(serialized.kotlinVersion ?: "2.1")!!,
+                        javaVersion = JvmTarget.fromString(serialized.javaVersion)!!,
+                        contentRoots = serialized.contentRoots.map { Path(it) },
+                        dependencies = emptyList(), // Break the cycle by not including dependencies
+                        project = project
+                    )
+                } else {
+                    LibraryModule(
+                        id = id,
+                        javaVersion = JvmTarget.fromString(serialized.javaVersion)!!,
+                        isJdk = serialized.isJdk ?: false,
+                        contentRoots = serialized.contentRoots.map { Path(it) },
+                        dependencies = emptyList(), // Break the cycle by not including dependencies
+                        project = project,
+                        appEnvironment = appEnvironment,
+                    )
+                }
+            }
+        }
+
+        visited.add(id)
+        val serialized = moduleMap[id] ?: throw IllegalStateException("Module not found: $id")
+        val deps = serialized.dependencies.map { build(it, depth + 1) }
         val module = buildModule(serialized, deps, project, appEnvironment)
         builtModules[id] = module
+        visited.remove(id)
         return module
     }
 

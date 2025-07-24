@@ -42,19 +42,29 @@ class WorkerThread(
                             }
                             is Command.ScanSourceFile -> {
                                 if(!command.virtualFile.url.startsWith("file://")) continue
+                                
+                                // Only process Kotlin files
+                                if (!command.virtualFile.extension.equals("kt", ignoreCase = true)) continue
 
                                 val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
-                                scanKtFile(project, ktFile, db)
-                                scanCount.incrementAndGet()
+                                    scanKtFile(project, ktFile, db)
+                                    scanCount.incrementAndGet()
                             }
                             is Command.IndexFile -> {
                                 if(command.virtualFile.url.startsWith("file://")) {
+                                    // Only process Kotlin files
+                                    if (!command.virtualFile.extension.equals("kt", ignoreCase = true)) {
+                                        indexCount.incrementAndGet()
+                                        continue
+                                    }
+                                    
                                     val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
                                     indexKtFile(project, ktFile, db)
+                                    indexCount.incrementAndGet()
                                 } else {
                                     indexClassFile(project, command.virtualFile, db)
+                                    indexCount.incrementAndGet()
                                 }
-                                indexCount.incrementAndGet()
                             }
                             is Command.IndexModifiedFile -> {
                                 info("Indexing modified file: ${command.ktFile.virtualFile.name}")

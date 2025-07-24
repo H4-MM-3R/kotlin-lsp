@@ -12,12 +12,16 @@ import org.gradle.tooling.model.idea.IdeaProject
 import org.gradle.tooling.model.idea.IdeaSingleEntryLibraryDependency
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreApplicationEnvironment
 import org.jetbrains.kotlin.config.LanguageVersion
-import org.jetbrains.kotlin.util.collectionUtils.concat
 import org.kotlinlsp.analysis.ProgressNotifier
 import org.kotlinlsp.analysis.modules.*
 import org.kotlinlsp.common.getCachePath
 import java.io.ByteArrayOutputStream
 import java.io.File
+import org.gradle.tooling.ResultHandler
+import org.gradle.tooling.GradleConnectionException
+import org.gradle.tooling.ModelBuilder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 
 class GradleBuildSystem(
     private val project: Project,
@@ -47,10 +51,11 @@ class GradleBuildSystem(
             .connect()
 
         val stdout = ByteArrayOutputStream()
-        val initScript = getInitScriptFile(rootFolder)
-        val ideaProject = connection
+        val isAndroidProject = isAndroidProject(rootFolder)
+        val initScript = if (isAndroidProject) getInitScriptFile(rootFolder) else null
+
+        val modelBuilder = connection
             .model(IdeaProject::class.java)
-            .withArguments("--init-script", initScript.absolutePath, "-DandroidVariant=${androidVariant}")
             .setStandardOutput(stdout)
             .addProgressListener({
                 progressNotifier.onReportProgress(
@@ -59,8 +64,13 @@ class GradleBuildSystem(
                     "[GRADLE] ${it.displayName}"
                 )
             }, OperationType.PROJECT_CONFIGURATION)
-            .get()
 
+        // Only add init script and Android variant if it's an Android project
+        if (isAndroidProject) {
+            modelBuilder.withArguments("--init-script", initScript!!.absolutePath, "-DandroidVariant=${androidVariant}")
+        }
+
+        val ideaProject = modelBuilder.blockingGetWithProgress(progressNotifier)
         val modules = mutableMapOf<String, SerializedModule>()
 
         // Register the JDK module
@@ -132,7 +142,7 @@ class GradleBuildSystem(
             }
 
             // Register source module
-            val isAndroidModule = ideaExtraSourceDeps.isNotEmpty()  // TODO Find a better way to know this
+            val isAndroidModule = isAndroidProject && ideaExtraSourceDeps.isNotEmpty()
             val sourceModuleId = module.name
             val sourceDirs = ideaSourceDirs.map { it.directory.absolutePath }
             val sourceDeps =
@@ -183,10 +193,12 @@ class GradleBuildSystem(
         val metadata = Gson().toJson(computeGradleMetadata(ideaProject))
 
         connection.close()
-        initScript.delete()
+        initScript?.delete()
 
-        val moduleList = modules.values.toList()
-        return BuildSystem.Result(buildModulesGraph(moduleList, modules, appEnvironment, project), metadata)
+        progressNotifier.onReportProgress(WorkDoneProgressKind.report, PROGRESS_TOKEN, "[GRADLE] Building modules graph...")
+        val result = BuildSystem.Result(buildModulesGraph(modules.values.toList(), modules, appEnvironment, project), metadata)
+        progressNotifier.onReportProgress(WorkDoneProgressKind.report, PROGRESS_TOKEN, "[GRADLE] Graph built successfully")
+        return result
     }
 }
 
@@ -253,4 +265,84 @@ private fun getInitScriptFile(rootFolder: String): File {
     }
 
     return scriptFile
+}
+
+private fun isAndroidProject(rootFolder: String): Boolean {
+    val rootDir = File(rootFolder)
+
+    // Check for Android in build files and version catalog
+    val filesToCheck = listOf(
+        "build.gradle",
+        "build.gradle.kts",
+        "libs.versions.toml"
+    )
+
+    for (fileName in filesToCheck) {
+        val file = File(rootDir, fileName)
+        if (file.exists()) {
+            try {
+                val content = file.readText()
+                if (content.contains("android", ignoreCase = true)) {
+                    return true
+                }
+            } catch (e: Exception) {
+                // Skip files that can't be read
+                continue
+            }
+        }
+    }
+
+    return false
+}
+
+
+private fun ModelBuilder<IdeaProject>.blockingGetWithProgress(progressNotifier: ProgressNotifier): IdeaProject {
+    val latch = CountDownLatch(1)
+    val resultRef = AtomicReference<IdeaProject>()
+    val errorRef = AtomicReference<Throwable>()
+
+    this.get(object : ResultHandler<IdeaProject> {
+        override fun onComplete(result: IdeaProject) {
+            progressNotifier.onReportProgress(
+                WorkDoneProgressKind.report,
+                GradleBuildSystem.PROGRESS_TOKEN,
+                "[GRADLE] Project resolved successfully"
+            )
+            resultRef.set(result)
+            latch.countDown()
+        }
+
+        override fun onFailure(t: GradleConnectionException) {
+            val exceptions = mutableListOf<String>()
+            var cur: Throwable? = t
+
+            while (cur != null) {
+                when(cur::class.simpleName) {
+                    "LocationAwareException" -> exceptions.add("${cur.localizedMessage}")
+                    "ExecException" -> exceptions.add("${cur.localizedMessage}")
+                    "NativeException" -> exceptions.add("${cur.localizedMessage}")
+                }
+                cur = cur.cause
+            }
+            exceptions.forEach {
+                progressNotifier.onReportProgress(
+                    WorkDoneProgressKind.report,
+                    GradleBuildSystem.PROGRESS_TOKEN,
+                    it
+                    )
+            }
+            progressNotifier.onReportProgress(
+                WorkDoneProgressKind.end,
+                GradleBuildSystem.PROGRESS_TOKEN,
+                "[GRADLE] Model resolution failed"
+            )
+            errorRef.set(t)
+            latch.countDown()
+        }
+    })
+
+    latch.await()
+
+    errorRef.get()?.let { throw it }
+    return resultRef.get()
 }
