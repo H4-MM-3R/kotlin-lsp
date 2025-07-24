@@ -54,7 +54,6 @@ fun semanticHighlightingAction(ktFile: KtFile): SemanticTokens {
             data.add(token.deltaStart - lastChar)
         } else {
             data.add(token.deltaStart)
-            lastChar = 0
         }
         data.add(token.length)
         data.add(token.tokenType)
@@ -87,8 +86,7 @@ fun semanticHighlightingRangeAction(ktFile: KtFile, range: Range): SemanticToken
         if (token.deltaLine == lastLine) {
             data.add(token.deltaStart - lastChar)
         } else {
-            data.add(token.deltaStart)
-            lastChar = 0
+           data.add(token.deltaStart)
         }
         data.add(token.length)
         data.add(token.tokenType)
@@ -240,7 +238,7 @@ private fun addReferenceToken(element: KtNameReferenceExpression, tokens: Mutabl
     val range = element.textRange.toLspRange(element.containingFile)
     
     analyze(ktFile) {
-        val symbol = element.mainReference?.resolveToSymbol()
+        val symbol = element.mainReference.resolveToSymbol()
         
         val (tokenType, modifiers) = when (symbol) {
             is KaClassLikeSymbol -> {
@@ -253,7 +251,6 @@ private fun addReferenceToken(element: KtNameReferenceExpression, tokens: Mutabl
                         KaClassKind.ANNOTATION_CLASS -> TokenType.CLASS
                         else -> TokenType.CLASS
                     }
-                    is KaTypeAliasSymbol -> TokenType.TYPE
                     else -> TokenType.TYPE
                 }
                 type to 0
