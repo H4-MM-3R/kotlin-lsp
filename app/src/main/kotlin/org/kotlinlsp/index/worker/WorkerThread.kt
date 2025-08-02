@@ -11,6 +11,8 @@ import org.kotlinlsp.index.db.Database
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import org.eclipse.lsp4j.WorkDoneProgressKind
+import org.kotlinlsp.buildsystem.GradleBuildSystem.Companion.PROGRESS_TOKEN
 import java.util.concurrent.atomic.AtomicInteger
 
 interface WorkerThreadNotifier: IndexNotifier {
@@ -23,78 +25,54 @@ class WorkerThread(
     private val notifier: WorkerThreadNotifier
 ): Runnable {
     private val workQueue = WorkQueue<Command>()
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val commandChannel = Channel<Command>(UNLIMITED)
 
     override fun run() {
-        runBlocking {
-            val scanCount = AtomicInteger(0)
-            val indexCount = AtomicInteger(0)
+        var scanCount = 0
+        var indexCount = 0
 
-            // Launch parallel command processors
-            val processors: List<Job> = List(4) { processorId ->
-                scope.launch {
-                    for (command in commandChannel) {
-                        when(command) {
-                            is Command.Stop -> {
-                                commandChannel.close()
-                                return@launch
-                            }
-                            is Command.ScanSourceFile -> {
-                                if(!command.virtualFile.url.startsWith("file://")) continue
-                                
-                                // Only process Kotlin files
-                                if (!command.virtualFile.extension.equals("kt", ignoreCase = true)) continue
+        while(true) {
+            when(val command = workQueue.take() ) {
+                is Command.Stop -> break
+                is Command.ScanSourceFile -> {
+                    if(!command.virtualFile.url.startsWith("file://")) return
 
-                                val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
-                                    scanKtFile(project, ktFile, db)
-                                    scanCount.incrementAndGet()
-                            }
-                            is Command.IndexFile -> {
-                                if(command.virtualFile.url.startsWith("file://")) {
-                                    // Only process Kotlin files
-                                    if (!command.virtualFile.extension.equals("kt", ignoreCase = true)) {
-                                        indexCount.incrementAndGet()
-                                        continue
-                                    }
-                                    
-                                    val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
-                                    indexKtFile(project, ktFile, db)
-                                    indexCount.incrementAndGet()
-                                } else {
-                                    indexClassFile(project, command.virtualFile, db)
-                                    indexCount.incrementAndGet()
-                                }
-                            }
-                            is Command.IndexModifiedFile -> {
-                                info("Indexing modified file: ${command.ktFile.virtualFile.name}")
-                                indexKtFile(project, command.ktFile, db)
-                            }
-                            is Command.IndexingFinished -> {
-                                info("Background indexing finished!, ${indexCount.get()} files!")
-                                notifier.onBackgroundIndexFinished()
-                            }
-                            is Command.SourceScanningFinished -> {
-                                info("Source file scanning finished!, ${scanCount.get()} files!")
-                                notifier.onSourceFileScanningFinished()
-                            }
+                    // Only process Kotlin files
+                    if (!command.virtualFile.extension.equals("kt", ignoreCase = true)) continue
+
+                    val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
+                    scanKtFile(project, ktFile, db)
+                    scanCount++;
+                }
+                is Command.IndexFile -> {
+                    if(command.virtualFile.url.startsWith("file://")) {
+
+                        // Only process Kotlin files
+                        if (!command.virtualFile.extension.equals("kt", ignoreCase = true)) {
+                            indexCount++
+                            continue
                         }
+
+                        val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
+                        indexKtFile(project, ktFile, db)
+                        indexCount++
+                    } else {
+                        indexClassFile(project, command.virtualFile, db)
+                        indexCount++
                     }
                 }
-            }
-
-            // Main loop to feed commands to processors
-            while(true) {
-                val command = workQueue.take()
-                if (command is Command.Stop) {
-                    commandChannel.send(command)
-                    break
+                is Command.IndexModifiedFile -> {
+                    info("Indexing modified file: ${command.ktFile.virtualFile.name}")
+                    indexKtFile(project, command.ktFile, db)
                 }
-                commandChannel.send(command)
+                is Command.IndexingFinished -> {
+                    info("Background indexing finished!, ${indexCount} files!")
+                    notifier.onBackgroundIndexFinished()
+                }
+                is Command.SourceScanningFinished -> {
+                    info("Source file scanning finished!, ${scanCount} files!")
+                    notifier.onSourceFileScanningFinished()
+                }
             }
-
-            // Wait for all processors to finish
-            processors.joinAll()
         }
     }
 
