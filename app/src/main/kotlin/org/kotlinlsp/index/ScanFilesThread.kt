@@ -5,18 +5,22 @@ import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.index.worker.WorkerThread
 import java.util.concurrent.atomic.AtomicBoolean
 import org.kotlinlsp.common.info
+import org.kotlinlsp.common.CustomDispatcher
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 
 class ScanFilesThread(
     private val worker: WorkerThread,
     private val modules: List<Module>
 ) : Runnable {
     private val shouldStop = AtomicBoolean(false)
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun run() {
         runBlocking {
-            // Scan phase - parallel processing
+            // Get optimal concurrency level based on our dispatcher
+            val maxConcurrency = 8 // Same as CustomDispatcher.cpu max parallelism
+            
+            // Scan phase - hyper-fast flow processing
             val sourceFiles = modules.asFlatSequence()
                 .filter { it.isSourceModule }
                 .map { it.computeFiles(extended = true) }
@@ -24,22 +28,19 @@ class ScanFilesThread(
                 .takeWhile { !shouldStop.get() }
                 .toList()
 
-            // Process source files in parallel
-            val scanJobs: List<Job> = sourceFiles.chunked(100).map { chunk ->
-                scope.launch {
-                    chunk.forEach { file ->
-                        if (!shouldStop.get()) {
-                            val command = Command.ScanSourceFile(file)
-                            worker.submitCommand(command)
-                        }
-                    }
+            @OptIn(ExperimentalCoroutinesApi::class)
+            sourceFiles.asFlow()
+                .filter { !shouldStop.get() }
+                .flatMapMerge(concurrency = maxConcurrency) { file ->
+                    flow {
+                        emit(worker.submitCommand(Command.ScanSourceFile(file)))
+                    }.flowOn(CustomDispatcher.cpu)
                 }
-            }
-            scanJobs.joinAll()
+                .collect()
 
             worker.submitCommand(Command.SourceScanningFinished)
 
-            // Index phase - parallel processing
+            // Index phase - hyper-fast flow processing
             val allFiles = modules.asFlatSequence()
                 .sortedByDescending { it.isSourceModule }
                 .map { it.computeFiles(extended = true) }
@@ -48,17 +49,16 @@ class ScanFilesThread(
                 .toList()
 
             info("${allFiles.size} files to index, starting indexing...")
-            // Process all files in parallel for indexing
-            val indexJobs: List<Job> = allFiles.chunked(allFiles.size/32).map { chunk ->
-                scope.launch {
-                    chunk.forEach { file ->
-                        if (!shouldStop.get()) {
-                            worker.submitCommand(Command.IndexFile(file))
-                        }
-                    }
+            
+            @OptIn(ExperimentalCoroutinesApi::class)
+            allFiles.asFlow()
+                .filter { !shouldStop.get() }
+                .flatMapMerge(concurrency = maxConcurrency) { file ->
+                    flow {
+                        emit(worker.submitCommand(Command.IndexFile(file)))
+                    }.flowOn(CustomDispatcher.cpu)
                 }
-            }
-            indexJobs.joinAll()
+                .collect()
 
             worker.submitCommand(Command.IndexingFinished)
         }
@@ -66,6 +66,5 @@ class ScanFilesThread(
 
     fun signalToStop() {
         shouldStop.set(true)
-        scope.cancel()
     }
 }

@@ -20,18 +20,13 @@ import org.kotlinlsp.index.db.Declaration
 import org.kotlinlsp.index.db.adapters.prefixSearch
 import kotlinx.coroutines.*
 import org.kotlinlsp.common.normalizeUri
+import org.kotlinlsp.common.CustomDispatcher
 import java.util.concurrent.ConcurrentLinkedQueue
 
 private data class SymbolData(
     val pointer: KaSymbolPointer<KaDeclarationSymbol>,
     val name: String
 )
-
-private val referenceDispatcher by lazy {
-    val cores = Runtime.getRuntime().availableProcessors()
-    val parallelism = (cores * 2 / 3).coerceAtMost(8)
-    Dispatchers.Default.limitedParallelism(parallelism)
-}
 
 fun findReferencesAction(ktFile: KtFile, position: Position, index: Index): List<Location>? {
     val offset = position.toOffset(ktFile)
@@ -62,7 +57,7 @@ fun findReferencesAction(ktFile: KtFile, position: Position, index: Index): List
 
     runBlocking {
         filesToSearch.map { file ->
-            async(referenceDispatcher) {
+            async(CustomDispatcher.cpu) {
                 try {
                     val fileReferences = findReferencesInFile(file, targetSymbolPointer)
                     references.addAll(fileReferences)
