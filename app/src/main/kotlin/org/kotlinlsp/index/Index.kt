@@ -44,6 +44,13 @@ class Index(
         .maximumSize(100)
         .build<String, KtFile>()
 
+    private val sourceFileCache: List<KtFile> = modules.asFlatSequence()
+            .filter { it.isSourceModule }
+            .map { it.computeFiles(extended = true) }
+            .flatten()
+            .mapNotNull { getKtFile(it) }
+            .toList()
+
     fun syncIndexInBackground() {
         // We have 2 threads here
         // Scan files -> It scans files to index, loads them as a KtFile and submits them to a work queue
@@ -101,11 +108,7 @@ class Index(
         return ktFile
     }
 
-    fun getAllSourceKtFiles(): Sequence<KtFile> {
-        return modules.asFlatSequence()
-            .filter { it.isSourceModule }
-            .map { it.computeFiles(extended = true) }
-            .flatten()
-            .mapNotNull { getKtFile(it) }
+    fun getAllSourceKtFiles(): List<KtFile> {
+        return sourceFileCache
     }
 }

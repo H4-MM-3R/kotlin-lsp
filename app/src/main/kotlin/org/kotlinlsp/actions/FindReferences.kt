@@ -77,7 +77,7 @@ fun findReferencesAction(ktFile: KtFile, position: Position, index: Index): List
 private fun getFilesToSearch(index: Index, symbolName: String): List<KtFile> {
     val filesMap = mutableMapOf<String, KtFile>()
 
-    index.openedKtFiles.forEach { (_, file) ->
+    index.getAllSourceKtFiles().forEach { file ->
         filesMap[file.virtualFile.path] = file
     }
 
