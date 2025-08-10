@@ -109,7 +109,7 @@ class KotlinLanguageServer(
     }
 
     override fun exit() {
-        lintExecutor.close()
+        lintExecutor.shutdownNow()
         analysisSession.dispose()
         notifier.onExit()
     }

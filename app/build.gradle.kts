@@ -7,6 +7,11 @@ plugins {
     application
 }
 
+// Ensure Kotlin compiles to JVM 17 bytecode
+kotlin {
+    jvmToolchain(17)
+}
+
 application {
     applicationName = "kotlin-lsp"
     mainClass = "org.kotlinlsp.MainKt"
@@ -61,7 +66,7 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
