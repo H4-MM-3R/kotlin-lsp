@@ -22,11 +22,25 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build distribution
         run: ./gradlew clean distZip
+
+      - name: Install VSCE
+        run: npm install -g @vscode/vsce
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Build VSCode extension (.vsix)
+        run: ./scripts/setup-vscode-extension.sh
 
       - name: Create release
         env:
@@ -46,3 +60,13 @@ jobs:
             --repo="$GITHUB_REPOSITORY" \
             --clobber \
             "app/build/distributions/*.zip"
+
+      - name: Upload VSCode extension (.vsix)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+        run: |
+          gh release upload "$tag" \
+            --repo="$GITHUB_REPOSITORY" \
+            --clobber \
+            "vscode-extension/*.vsix"
