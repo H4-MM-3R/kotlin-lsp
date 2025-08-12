@@ -15,7 +15,7 @@ kotlin {
 application {
     applicationName = "kotlin-lsp"
     mainClass = "org.kotlinlsp.MainKt"
-    version = "1.7"
+    version = "1.8"
 }
 
 repositories {

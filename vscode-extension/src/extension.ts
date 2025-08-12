@@ -113,7 +113,7 @@ function getServerPath(config: vscode.WorkspaceConfiguration): string | null {
     // Look for server in workspace
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (workspaceFolder) {
-        const workspaceServerPath = path.join(workspaceFolder.uri.fsPath, 'lsp-dist', 'kotlin-lsp-1.7', 'bin', 'kotlin-lsp');
+        const workspaceServerPath = path.join(workspaceFolder.uri.fsPath, 'lsp-dist', 'kotlin-lsp-1.8', 'bin', 'kotlin-lsp');
         if (fs.existsSync(workspaceServerPath)) {
             return workspaceServerPath;
         }
