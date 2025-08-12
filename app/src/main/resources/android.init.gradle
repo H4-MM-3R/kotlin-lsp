@@ -15,7 +15,17 @@ class AndroidPlugin implements Plugin<Project> {
             IdeaModel ideaModel = (IdeaModel)project.extensions.findByName("idea")
             IdeaModule module = ideaModel.module
 
-            android.applicationVariants.all { appVariant ->
+            // Support both application and library Android modules
+            def variants = null
+            if (android.hasProperty("applicationVariants")) {
+                variants = android.applicationVariants
+            } else if (android.hasProperty("libraryVariants")) {
+                variants = android.libraryVariants
+            } else {
+                return
+            }
+
+            variants.all { appVariant ->
                 if (appVariant.name != variant) return
 
                 // TODO Handle merge conflicts (e.g. debug sourceset overrides main sourceset)
@@ -35,9 +45,24 @@ class AndroidPlugin implements Plugin<Project> {
                 android.bootClasspath.each {
                     module.sourceDirs.add(new File("jar:${it.path}"))
                 }
-                appVariant.getCompileClasspath().files.each {
+                def compileClasspathFiles = null
+                try {
+                    // Prefer the direct variant API when available
+                    compileClasspathFiles = appVariant.getCompileClasspath().files
+                } catch(Throwable ignored) {
+                    // Fallback to configuration-based resolution (e.g. "debugCompileClasspath")
+                    def confName = "${appVariant.name}CompileClasspath"
+                    def conf = project.configurations.findByName(confName)
+                    try {
+                        compileClasspathFiles = conf != null ? conf.resolve() : []
+                    } catch(Throwable __ignored) {
+                        // Do not fail the build if classpath cannot be resolved; proceed without extra deps
+                        compileClasspathFiles = []
+                    }
+                }
+                compileClasspathFiles.each {
                     // This is a workaround as we cannot add new dependencies to IdeaModel because of project.afterEvaluate
-                    // But we need project.afterEvaluate so appVariant.getCompileClasspath() works
+                    // But we need project.afterEvaluate so compile classpaths can be read
                     module.sourceDirs.add(new File("jar:${it.path}"))
                 }
             }
