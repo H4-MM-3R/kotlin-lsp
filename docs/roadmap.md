@@ -10,6 +10,7 @@
     - ✅ stdio
 - ✅ Project Handling 
     - ✅ Project Handling (Gradle: Single and Multi Module)
+    - ✅ Project Handling (Gradle (Android): Single and Multi Module)
 - ✅ Diagnostics
 - ✅ Go to Definition
 - ✅ Go to Implementations
@@ -33,7 +34,6 @@
 
 ### Out of Scope ( for now )
 - [ ] Project Handling 
-    - [ ] Project Handling (Android: Single and Multi Module)
     - [ ] Project Handling (KMP)
     - [ ] Project Handling (Maven)
     - [ ] Project Handling (Bazel)
