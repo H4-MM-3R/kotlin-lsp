@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.library.KLIB_FILE_EXTENSION
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import org.kotlinlsp.common.read
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
@@ -120,6 +121,8 @@ private fun getVirtualFileForLibraryRoot(
 
     // .jar or .klib files
     if (pathString.endsWith(JAR_PROTOCOL) || pathString.endsWith(KLIB_FILE_EXTENSION)) {
+        // Skip non-existent archives (e.g., AGP intermediates like R.jar not generated yet)
+        if (!Files.exists(root)) return null
         return project.read { environment.jarFileSystem.findFileByPath(pathString + JAR_SEPARATOR) }
     }
 
@@ -134,5 +137,6 @@ private fun getVirtualFileForLibraryRoot(
     }
 
     // Regular .class file
+    if (!Files.exists(root)) return null
     return project.read { VirtualFileManager.getInstance().findFileByNioPath(root) }
 }

@@ -71,6 +71,53 @@ class GradleBuildSystem(
         }
 
         val ideaProject = modelBuilder.blockingGetWithProgress(progressNotifier)
+
+        // For Android projects, ensure required AGP intermediates (e.g., R.jar, classes.jar) exist.
+        // Target ONLY modules that have missing jar entries referenced on compile classpaths.
+        if (isAndroidProject) {
+            try {
+                val marker = getCachePath(rootFolder).resolve(".first_assemble_done").toFile()
+                if (!marker.exists()) {
+                    val projectRoot = File(rootFolder).absolutePath + File.separator
+                    val tasks = ideaProject.modules
+                        .asSequence()
+                        .mapNotNull { m -> m.contentRoots.firstOrNull() }
+                        .flatMap { cr -> cr.sourceDirectories.asSequence().map { it.directory.toString() } }
+                        .filter { it.startsWith("jar:") }
+                        .map { it.removePrefix("jar:") }
+                        .filter { it.startsWith(projectRoot) && it.contains("/build/intermediates/") }
+                        .mapNotNull { jarPath ->
+                            // derive module name from .../<module>/build/...
+                            val rel = jarPath.removePrefix(projectRoot)
+                            val moduleName = rel.substringBefore("/build/")
+                            val file = File(jarPath)
+                            if (!file.exists()) ":${moduleName}:assembleDebug" else null
+                        }
+                        .distinct()
+                        .toList()
+
+                    if (tasks.isNotEmpty()) {
+                        progressNotifier.onReportProgress(
+                            WorkDoneProgressKind.report,
+                            PROGRESS_TOKEN,
+                            "[GRADLE] First-run assemble (targeted by missing jars) for tasks: ${tasks.joinToString()}"
+                        )
+                        // Run as a single build invocation; if it fails, try per-task fallback
+                        try {
+                            connection.newBuild().forTasks(*tasks.toTypedArray()).withArguments("-x", "lint", "-x", "test").run()
+                        } catch (_: Throwable) {
+                            tasks.forEach { t ->
+                                try { connection.newBuild().forTasks(t).withArguments("-x", "lint", "-x", "test").run() } catch (_: Throwable) {}
+                            }
+                        }
+                    }
+
+                    marker.writeText("done")
+                }
+            } catch (_: Throwable) {
+                // Best-effort: do not fail project resolution if assemble fails
+            }
+        }
         val modules = mutableMapOf<String, SerializedModule>()
 
         // Register the JDK module
@@ -158,7 +205,9 @@ class GradleBuildSystem(
                             emptySequence()
                         }
                     ).plus(
-                        ideaSourceModuleDeps.map { it.targetModuleName }
+                        // Normalize module dependency names. Tooling may return paths like ":lyricsService";
+                        // our module ids use the plain module name (e.g., "lyricsService").
+                        ideaSourceModuleDeps.map { dep -> dep.targetModuleName.substringAfterLast(":") }
                     )
             modules[sourceModuleId] = SerializedModule(
                 id = sourceModuleId,
