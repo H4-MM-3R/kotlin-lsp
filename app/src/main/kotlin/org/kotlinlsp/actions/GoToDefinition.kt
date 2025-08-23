@@ -34,6 +34,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.jar.JarFile
 import org.kotlinlsp.common.normalizeUri
+import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 
 
@@ -61,24 +62,20 @@ fun goToDefinitionAction(ktFile: KtFile, position: Position): List<Location?>? =
         
         val file = element.containingFile ?: continue
 
-        // It comes from a java .class file
         if(file.viewProvider.document == null) {
-            if(file.virtualFile.url.startsWith("jrt:/")) {
-                // Comes from JDK
-                val classFile = File.createTempFile("jrtClass", ".class")
+            // It comes from a java .class file
+                val classFile = File.createTempFile("javaClass", ".class")
                 classFile.writeBytes(file.virtualFile.contentsToByteArray())
-                val result = tryDecompileJavaClass(classFile.toPath())
+                val path = tryDecompileJavaClass(classFile.toPath(), file)
+                val result = Location().apply {
+                    uri = Paths.get(path?.absolutePathString() ?: classFile.path.toString()).toUri().toString().normalizeUri()
+                    range = Range().apply {
+                        start = Position(0, 0)  // TODO Set correct position
+                        end = Position(0, 1)
+                    }
+                }
                 classFile.delete()
                 locations.add(result)
-            } else {
-                // Comes from JAR
-                val classFile = extractClassFromJar("${file.containingDirectory}/${file.containingFile.name}")
-                if (classFile != null) {
-                    val result = tryDecompileJavaClass(classFile.toPath())
-                    classFile.delete()
-                    locations.add(result)
-                }
-            }
         } else {
             // Regular source file
             val range = element.textRange.toLspRange(file)
@@ -158,7 +155,7 @@ private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): 
     })
 }
 
-private fun tryDecompileJavaClass(path: Path): Location? {
+private fun tryDecompileJavaClass(path: Path, file: PsiFile): Path? {
     val outputDir = Files.createTempDirectory("fernflower_output").toFile()
     try {
         val originalOut = System.out
@@ -174,43 +171,13 @@ private fun tryDecompileJavaClass(path: Path): Location? {
 
         System.setOut(originalOut)
 
-        val outName = path.fileName.replaceExtensionWith(".java")
+        val outName = Path(file.name.replace(".class", ".java"))
         val outPath = outputDir.toPath().resolve(outName)
         if (!Files.exists(outPath)) return null
         outPath.toFile().setWritable(false)
-
-        return Location().apply {
-            uri = Paths.get(outPath.absolutePathString()).toUri().toString().normalizeUri()
-            range = Range().apply {
-                start = Position(0, 0)  // TODO Set correct position
-                end = Position(0, 1)
-            }
-        }
+        return outPath
     } catch (e: Exception) {
         warn(e.message ?: "Unknown fernflower error")
         return null
     }
-}
-
-private fun extractClassFromJar(jarPathWithEntry: String): File? {
-    try {
-        val path = jarPathWithEntry.removePrefix("PsiDirectory:")
-        val (jarPath, entryPath) = path.split("!/")
-        val jarFile = JarFile(jarPath)
-        val entry = jarFile.getEntry(entryPath)
-        val inputStream = jarFile.getInputStream(entry)
-        val tempFile = File.createTempFile("JavaClass", ".class")
-        tempFile.outputStream().use { output -> inputStream.copyTo(output) }
-        jarFile.close()
-        return tempFile
-    } catch (e: Exception) {
-        warn("Error extracting class from jar: $jarPathWithEntry")
-        return null
-    }
-}
-
-private fun Path.replaceExtensionWith(newExtension: String): Path {
-    val oldName = fileName.toString()
-    val newName = oldName.substring(0, oldName.lastIndexOf(".")) + newExtension
-    return resolveSibling(newName)
 }

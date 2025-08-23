@@ -33,7 +33,8 @@ dependencies {
     implementation("com.jetbrains.intellij.platform:core:$intellijVersion")
     implementation("com.jetbrains.intellij.platform:core-impl:$intellijVersion")
     implementation("com.jetbrains.intellij.platform:util:$intellijVersion")
-    implementation("com.jetbrains.intellij.java:java-decompiler-engine:243.22562.218")
+    // implementation("com.jetbrains.intellij.java:java-decompiler-engine:243.22562.218") // using vineflower instead
+    implementation("org.vineflower:vineflower:1.11.1")
 
     val analysisApiKotlinVersion = "2.2.20-dev-2432" // 13-May-2025 (version that KSP uses)
     implementation("org.jetbrains.kotlin:kotlin-compiler:$analysisApiKotlinVersion")
