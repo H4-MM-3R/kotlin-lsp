@@ -126,6 +126,7 @@ class GradleBuildSystem(
             val jdkModule = SerializedModule(
                 id = "JDK",
                 contentRoots = listOf(jdk.javaHome.absolutePath),
+                sourceRoots = findJdkSourcesPath(jdk.javaHome.absolutePath),
                 javaVersion = ideaProject.jdkName,
                 dependencies = listOf(),
                 isSource = false,
@@ -169,6 +170,7 @@ class GradleBuildSystem(
                     dependencies = emptyList(),
                     isJdk = false,
                     javaVersion = ideaProject.jdkName,
+                    sourceRoots = it.source?.let { listOf(it.absolutePath) },
                     contentRoots = listOf(it.file.absolutePath)
                 )
             }
@@ -184,6 +186,7 @@ class GradleBuildSystem(
                     dependencies = emptyList(),
                     isJdk = false,
                     javaVersion = ideaProject.jdkName,
+                    sourceRoots = null, // Extra dependencies typically don't have source JARs
                     contentRoots = listOf(path)
                 )
             }
@@ -214,6 +217,7 @@ class GradleBuildSystem(
                 isSource = true,
                 dependencies = sourceDeps.toList(),
                 contentRoots = sourceDirs,
+                sourceRoots = sourceDirs,
                 kotlinVersion = LanguageVersion.KOTLIN_2_1.versionString,   // TODO Figure out this
                 javaVersion = ideaProject.jdkName
             )
@@ -222,6 +226,7 @@ class GradleBuildSystem(
             if (contentRoot.testDirectories.isNotEmpty()) {
                 val testModuleId = "${sourceModuleId}-test"
                 val testDirs = contentRoot.testDirectories.map { it.directory.absolutePath }
+                val testSources = contentRoot.testDirectories.map { it.directory.absolutePath }
                 val testDeps =
                     sourceDeps
                         .plus(ideaTestDeps.map { it.gradleModuleVersion.formatted() })
@@ -231,6 +236,7 @@ class GradleBuildSystem(
                     isSource = true,
                     dependencies = testDeps.toList(),
                     contentRoots = testDirs,
+                    sourceRoots = testDirs,
                     kotlinVersion = LanguageVersion.KOTLIN_2_1.versionString,   // TODO Figure out this
                     javaVersion = ideaProject.jdkName
                 )
@@ -252,6 +258,22 @@ class GradleBuildSystem(
 }
 
 private fun GradleModuleVersion.formatted(): String = "$group:$name:${version}"
+
+private fun findJdkSourcesPath(jdkHomePath: String): List<String>? {
+    val jdkHome = File(jdkHomePath)
+    
+    // Common locations for JDK source files
+    val possibleSourcePaths = listOf(
+        File(jdkHome, "lib/src.zip"),           // Oracle JDK/OpenJDK
+        File(jdkHome, "src.zip"),               // Some distributions
+        File(jdkHome.parentFile, "src.zip"),    // Some installations
+    )
+    
+    return possibleSourcePaths
+        .filter { it.exists() }
+        .map { it.absolutePath }
+        .takeIf { it.isNotEmpty() }
+}
 
 private fun computeGradleMetadata(project: IdeaProject): Map<String, Map<String, Long>> {
     val result = mutableMapOf<String, Map<String, Long>>()

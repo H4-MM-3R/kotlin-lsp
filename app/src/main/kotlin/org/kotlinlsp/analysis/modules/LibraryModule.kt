@@ -2,9 +2,13 @@ package org.kotlinlsp.analysis.modules
 
 import com.intellij.core.CoreApplicationEnvironment
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileProvider
 import com.intellij.openapi.vfs.StandardFileSystems.JAR_PROTOCOL
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.impl.ArchiveHandler
+import com.intellij.openapi.vfs.local.CoreLocalFileSystem
+import com.intellij.openapi.vfs.local.CoreLocalVirtualFile
 import com.intellij.psi.search.GlobalSearchScope
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaImplementationDetail
@@ -14,6 +18,7 @@ import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KaModuleBase
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaLibraryModule
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaLibrarySourceModule
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaModule
+import org.jetbrains.kotlin.cli.common.localfs.KotlinLocalVirtualFile
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreApplicationEnvironment
 import org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem
 import org.jetbrains.kotlin.config.JvmTarget
@@ -29,6 +34,7 @@ class LibraryModule(
     override val id: String,
     val appEnvironment: KotlinCoreApplicationEnvironment,
     override val contentRoots: List<Path>,
+    override val sourceRoots: List<Path>?,
     val javaVersion: JvmTarget,
     override val dependencies: List<Module> = listOf(),
     val isJdk: Boolean = false,
@@ -60,6 +66,34 @@ class LibraryModule(
             .map {
                 project.read { LibraryUtils.getAllVirtualFilesFromRoot(it, includeRoot = true) }
             }
+            .flatten()
+    }
+
+    @OptIn(KaImplementationDetail::class)
+    fun computeSources(): Sequence<VirtualFile> {
+        val roots = sourceRoots ?: return emptySequence()
+
+        if (isJdk) {
+            // JDK sources come as a single src.zip. We need to mount it and return
+            // the module directory roots such as java.* and jdk.* inside the archive.
+            val srcZip = roots.firstOrNull() ?: return emptySequence()
+            val zipRoot = getVirtualFileForLibraryRoot(srcZip, appEnvironment, project) ?: return emptySequence()
+            return project.read {
+                zipRoot.children
+                    ?.asSequence()
+                    ?.filter { it.isDirectory && (it.name.startsWith("java.") || it.name.startsWith("jdk.")) }
+                    ?.map { project.read {
+                        LibraryUtils.getAllVirtualFilesFromRoot(it, true)
+                    } }?.flatten()
+                    ?: emptySequence()
+            }
+        }
+
+        // Non-JDK sources: mount the -sources.jar and traverse all files under it
+        return roots
+            .asSequence()
+            .mapNotNull { getVirtualFileForLibraryRoot(it, appEnvironment, project) }
+            .map { project.read { LibraryUtils.getAllVirtualFilesFromRoot(it, includeRoot = true) } }
             .flatten()
     }
 
@@ -119,10 +153,14 @@ private fun getVirtualFileForLibraryRoot(
 ): VirtualFile? {
     var pathString = root.absolutePathString()
 
-    // .jar or .klib files
-    if (pathString.endsWith(JAR_PROTOCOL) || pathString.endsWith(KLIB_FILE_EXTENSION)) {
+    // .jar, .zip or .klib files
+    if (pathString.endsWith(JAR_PROTOCOL) || pathString.endsWith(KLIB_FILE_EXTENSION) || pathString.endsWith(".zip") || pathString.endsWith("zip")) {
         // Skip non-existent archives (e.g., AGP intermediates like R.jar not generated yet)
         if (!Files.exists(root)) return null
+        // Normalize path separators for JarFileSystem
+        if(!pathString.contains(JAR_SEPARATOR)) {
+            pathString = pathString.replace("\\", "/")
+        }
         return project.read { environment.jarFileSystem.findFileByPath(pathString + JAR_SEPARATOR) }
     }
 

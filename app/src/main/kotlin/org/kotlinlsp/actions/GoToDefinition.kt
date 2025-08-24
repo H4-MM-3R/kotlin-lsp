@@ -21,7 +21,21 @@ import org.jetbrains.kotlin.idea.references.AbstractKtReference
 import org.jetbrains.kotlin.idea.references.KtReference
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtDeclaration
+import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.KtClassOrObject
+import org.jetbrains.kotlin.psi.KtProperty
+import com.intellij.psi.PsiJavaFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiClass
+import com.intellij.psi.PsiMethod
+import com.intellij.psi.PsiReference
+import com.intellij.psi.util.PsiTreeUtil
+import org.jetbrains.kotlin.name.FqName
+import org.kotlinlsp.index.Index
 import org.jetbrains.kotlin.psi.KtReferenceExpression
+import org.jetbrains.kotlin.psi.psiUtil.textRangeWithoutComments
+import org.kotlinlsp.common.findSourceSymbols
 import org.kotlinlsp.common.toLspRange
 import org.kotlinlsp.common.toOffset
 import org.kotlinlsp.common.warn
@@ -34,6 +48,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.jar.JarFile
 import org.kotlinlsp.common.normalizeUri
+import org.kotlinlsp.index.queries.sourcesForPackage
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 
@@ -45,11 +60,17 @@ fun KtReference.mutlipleResolve(): List<PsiElement?> {
     return psiResults
 }
 
-fun goToDefinitionAction(ktFile: KtFile, position: Position): List<Location?>? = analyze(ktFile) {
+fun goToDefinitionAction(ktFile: KtFile, position: Position, index: Index): List<Location?>? = analyze(ktFile) {
     val offset = position.toOffset(ktFile)
     val ref = ktFile.findReferenceAt(offset) as? KtReference ?: return null
     val elements = ref.mutlipleResolve()
-    
+
+    val isFromSource = elements.map { it?.containingFile }.distinct().any { ele -> ele?.viewProvider?.document != null }
+    if(!isFromSource) {
+        val possibleLocations = getFromSourcesJar(ktFile, ref, index)
+        if (possibleLocations.isNotEmpty()) return possibleLocations
+    }
+
     // If no elements found, try library resolution
     if (elements.isEmpty()) {
         return tryResolveFromKotlinLibrary(ktFile, offset)
@@ -59,8 +80,9 @@ fun goToDefinitionAction(ktFile: KtFile, position: Position): List<Location?>? =
     
     for (element in elements) {
         if (element == null) continue
-        
+
         val file = element.containingFile ?: continue
+
 
         if(file.viewProvider.document == null) {
             // It comes from a java .class file
@@ -88,6 +110,23 @@ fun goToDefinitionAction(ktFile: KtFile, position: Position): List<Location?>? =
     }
     
     return locations
+}
+
+private fun KaSession.getFromSourcesJar(ktFile: KtFile, ref: KtReference,  index: Index): List<Location> {
+        val possibleVal = findSourceSymbols(ktFile, ref, index);
+        if(possibleVal.isEmpty()) return emptyList()
+        val referenceFile = possibleVal.first().containingFile
+        val newFile = File.createTempFile("temp", ".${referenceFile.virtualFile.extension}")
+        newFile.writeBytes(referenceFile.virtualFile.contentsToByteArray())
+
+        possibleVal.first().let {
+            val uri = newFile.toURI().toString().normalizeUri()
+            val range = it.textRangeWithoutComments.toLspRange(it.containingFile)
+            return listOf(Location().apply {
+                this.uri = uri
+                this.range = range
+            })
+        }
 }
 
 private fun KaSession.tryResolveFromKotlinLibrary(ktFile: KtFile, offset: Int): List<Location?>? {

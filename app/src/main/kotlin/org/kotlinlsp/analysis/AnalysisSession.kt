@@ -303,12 +303,12 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
 
     fun hover(path: String, position: Position): Pair<String, Range>? {
         val ktFile = getKtFile(path) ?: return null
-        return project.read { hoverAction(ktFile, position) }
+        return project.read { hoverAction(ktFile, position, index) }
     }
 
     fun goToDefinition(path: String, position: Position): List<Location?>? {
         val ktFile = getKtFile(path) ?: return null
-        return project.read { goToDefinitionAction(ktFile, position) }
+        return project.read { goToDefinitionAction(ktFile, position, index) }
     }
 
     fun goToImplementation(path: String, position: Position): List<Location?>? {

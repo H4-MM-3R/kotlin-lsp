@@ -9,6 +9,7 @@ interface Module {
     val dependencies: List<Module>
     val isSourceModule: Boolean
     val contentRoots: List<Path>
+    val sourceRoots: List<Path>?
     val kaModule: KaModule
 
     // Extended = true includes each file from .jar file

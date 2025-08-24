@@ -14,6 +14,7 @@ data class SerializedModule(
     val id: String,
     val dependencies: List<String>,
     val contentRoots: List<String>,
+    val sourceRoots: List<String>? = null,
     val javaVersion: String,
     val isSource: Boolean,
     // SourceModule
@@ -36,6 +37,7 @@ fun serializeModules(modules: List<Module>): String {
             is SourceModule -> SerializedModule(
                 id = id,
                 contentRoots = current.contentRoots.map { it.absolutePathString() },
+                sourceRoots = current.sourceRoots?.map { it.absolutePathString() },
                 kotlinVersion = current.kotlinVersion.versionString,
                 javaVersion = current.javaVersion.toString(),
                 dependencies = current.dependencies.map { it.id },
@@ -44,6 +46,7 @@ fun serializeModules(modules: List<Module>): String {
             is LibraryModule -> SerializedModule(
                 id = id,
                 contentRoots = current.contentRoots.map { it.absolutePathString() },
+                sourceRoots = current.sourceRoots?.map { it.absolutePathString() },
                 isJdk = current.isJdk,
                 javaVersion = current.javaVersion.toString(),
                 dependencies = current.dependencies.map { it.id },
@@ -99,6 +102,7 @@ fun buildModulesGraph(
                         javaVersion = JvmTarget.fromString(serialized.javaVersion)!!,
                         isJdk = serialized.isJdk ?: false,
                         contentRoots = serialized.contentRoots.map { Path(it) },
+                        sourceRoots = serialized.sourceRoots?.map { Path(it) },
                         dependencies = emptyList(), // Break the cycle by not including dependencies
                         project = project,
                         appEnvironment = appEnvironment,
@@ -144,6 +148,7 @@ private fun buildModule(
             javaVersion = JvmTarget.fromString(it.javaVersion)!!,
             isJdk = it.isJdk!!,
             contentRoots = it.contentRoots.map { Path(it) },
+            sourceRoots = it.sourceRoots?.map { Path(it) },
             dependencies = deps,
             project = project,
             appEnvironment = appEnvironment,

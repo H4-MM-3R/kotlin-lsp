@@ -19,6 +19,7 @@ class Database(rootFolder: String) {
     val filesDb: DatabaseAdapter
     val packagesDb: DatabaseAdapter
     val declarationsDb: DatabaseAdapter
+    val sourcesDb: DatabaseAdapter
 
     init {
         try {
@@ -38,6 +39,7 @@ class Database(rootFolder: String) {
             filesDb = RocksDBAdapter(cachePath.resolve("files"))
             packagesDb = RocksDBAdapter(cachePath.resolve("packages"))
             declarationsDb = RocksDBAdapter(cachePath.resolve("declarations"))
+            sourcesDb = RocksDBAdapter(cachePath.resolve("sources"))
             projectDb.close()
         } catch (e: RocksDBException) {
             warn("Failed to initialize database: ${e.message}")
@@ -53,6 +55,7 @@ class Database(rootFolder: String) {
         filesDb.close()
         packagesDb.close()
         declarationsDb.close()
+        sourcesDb.close()
     }
 
     private fun deleteAll() {
@@ -60,5 +63,6 @@ class Database(rootFolder: String) {
         File(cachePath.resolve("files").absolutePathString()).deleteRecursively()
         File(cachePath.resolve("packages").absolutePathString()).deleteRecursively()
         File(cachePath.resolve("declarations").absolutePathString()).deleteRecursively()
+        File(cachePath.resolve("sources").absolutePathString()).deleteRecursively()
     }
 }

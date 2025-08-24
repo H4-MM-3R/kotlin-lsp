@@ -8,6 +8,8 @@ import org.kotlinlsp.common.info
 import org.kotlinlsp.common.CustomDispatcher
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import org.jetbrains.kotlin.cli.common.GroupedKtSources
+import org.kotlinlsp.analysis.modules.LibraryModule
 
 class ScanFilesThread(
     private val worker: WorkerThread,
@@ -39,6 +41,26 @@ class ScanFilesThread(
                 .collect()
 
             worker.submitCommand(Command.SourceScanningFinished)
+
+            val sources = modules.asFlatSequence()
+                .filter { it.sourceRoots != null && it is LibraryModule }
+                .map {
+                    it as LibraryModule
+                    it.computeSources()
+                }.flatten().takeWhile { !shouldStop.get() }.toList()
+            info("${sources.size} sources to index, starting indexing...")
+
+            @OptIn(ExperimentalCoroutinesApi::class)
+            sources.asFlow()
+                .filter { !shouldStop.get() }
+                .flatMapMerge(concurrency = maxConcurrency) { file ->
+                    flow {
+                        emit(worker.submitCommand(Command.IndexSource(file)))
+                    }.flowOn(CustomDispatcher.cpu)
+                }
+                .collect()
+
+            worker.submitCommand(Command.SourceIndexingFinished)
 
             // Index phase - hyper-fast flow processing
             val allFiles = modules.asFlatSequence()

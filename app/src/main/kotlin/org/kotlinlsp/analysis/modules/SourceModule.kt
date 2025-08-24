@@ -25,6 +25,8 @@ class SourceModule(
     val kotlinVersion: LanguageVersion,
     private val project: Project,
 ) : Module {
+    override val sourceRoots: List<Path>?
+        get() = contentRoots // For source modules, sourceRoots are the same as contentRoots
     override val isSourceModule: Boolean
         get() = true
 

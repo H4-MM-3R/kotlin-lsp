@@ -29,6 +29,7 @@ class WorkerThread(
     override fun run() {
         var scanCount = 0
         var indexCount = 0
+        var sourceCount = 0
 
         while(true) {
             when(val command = workQueue.take() ) {
@@ -42,6 +43,12 @@ class WorkerThread(
                     val ktFile = project.read { PsiManager.getInstance(project).findFile(command.virtualFile) } as KtFile
                     scanKtFile(project, ktFile, db)
                     scanCount++;
+                }
+                is Command.IndexSource -> {
+                    if( command.virtualFile.extension.equals("kt", true) || command.virtualFile.extension.equals("java", true)) {
+                        sourceCount++
+                        indexSourceFile(project, command.virtualFile, db)
+                    }
                 }
                 is Command.IndexFile -> {
                     if(command.virtualFile.url.startsWith("file://")) {
@@ -67,6 +74,9 @@ class WorkerThread(
                 is Command.IndexingFinished -> {
                     info("Background indexing finished!, ${indexCount} files!")
                     notifier.onBackgroundIndexFinished()
+                }
+                is Command.SourceIndexingFinished -> {
+                    info("Source file indexing finished!, ${sourceCount} files!")
                 }
                 is Command.SourceScanningFinished -> {
                     info("Source file scanning finished!, ${scanCount} files!")
