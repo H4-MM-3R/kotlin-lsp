@@ -13,6 +13,7 @@
     - ✅ Project Handling (Gradle (Android): Single and Multi Module)
 - ✅ Diagnostics
 - ✅ Go to Definition
+  - ✅ Definition to sources ( -sources.jar )
 - ✅ Go to Implementations
 - ✅ Go to References
 - ✅ Rename Refactoring
@@ -25,7 +26,7 @@
   - ✅ Add Imports
   - ✅ Implement/Override Members
 - ✅ Hover
-  - [ ] Hover Documentation (KDoc based Description)
+  - ✅ Hover Documentation (KDoc based Description)
 - [ ] Code Completion
   - ✅ Dot based completions
   - [ ] General completions
