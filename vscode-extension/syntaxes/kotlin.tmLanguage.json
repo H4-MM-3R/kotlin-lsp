@@ -2,59 +2,55 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "Kotlin",
   "scopeName": "source.kotlin",
+  "fileTypes": ["kt", "kts"],
   "patterns": [
-    {
-      "include": "#comments"
-    },
-    {
-      "include": "#keywords"
-    },
-    {
-      "include": "#strings"
-    },
-    {
-      "include": "#numbers"
-    },
-    {
-      "include": "#operators"
-    }
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#annotations" },
+    { "include": "#functions" },
+    { "include": "#variables" },
+    { "include": "#operators" }
   ],
   "repository": {
-    "keywords": {
+    "comments": {
       "patterns": [
+        { "name": "comment.line.double-slash.kotlin", "match": "//.*$" },
         {
-          "name": "keyword.control.kotlin",
-          "match": "\\b(if|else|when|for|while|do|break|continue|return|try|catch|finally|throw)\\b"
+          "name": "comment.block.documentation.kotlin",
+          "begin": "/\\*\\*",
+          "end": "\\*/"
         },
         {
-          "name": "keyword.declaration.kotlin",
-          "match": "\\b(class|interface|object|fun|val|var|constructor|init|companion|enum|annotation|data|sealed|abstract|open|final|override|private|protected|public|internal|inline|suspend|infix|operator|vararg|tailrec|lateinit|const|expect|actual)\\b"
-        },
-        {
-          "name": "keyword.other.kotlin",
-          "match": "\\b(import|package|as|typealias|typeof|is|in|!is|!in|this|super|where|by|delegate|get|set|field|param|setparam|property|receiver)\\b"
-        },
-        {
-          "name": "constant.language.kotlin",
-          "match": "\\b(true|false|null)\\b"
-        },
-        {
-          "name": "storage.type.kotlin",
-          "match": "\\b(Any|Unit|Nothing|String|Int|Long|Short|Byte|Double|Float|Char|Boolean|Array|List|MutableList|Set|MutableSet|Map|MutableMap)\\b"
+          "name": "comment.block.kotlin",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [{ "include": "#comments" }]
         }
       ]
     },
+
     "strings": {
       "patterns": [
         {
+          "name": "string.quoted.triple.kotlin",
+          "begin": "\"\"\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.kotlin" } },
+          "end": "\"\"\"",
+          "endCaptures":   { "0": { "name": "punctuation.definition.string.end.kotlin" } },
+          "patterns": [{ "include": "#interpolation" }]
+        },
+        {
           "name": "string.quoted.double.kotlin",
           "begin": "\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.kotlin" } },
           "end": "\"",
+          "endCaptures":   { "0": { "name": "punctuation.definition.string.end.kotlin" } },
           "patterns": [
-            {
-              "name": "constant.character.escape.kotlin",
-              "match": "\\\\."
-            }
+            { "name": "constant.character.escape.kotlin", "match": "\\\\(u[0-9a-fA-F]{4}|[btnr\"'\\\\])" },
+            { "include": "#interpolation" }
           ]
         },
         {
@@ -62,62 +58,97 @@
           "begin": "'",
           "end": "'",
           "patterns": [
-            {
-              "name": "constant.character.escape.kotlin",
-              "match": "\\\\."
-            }
-          ]
-        },
-        {
-          "name": "string.quoted.triple.kotlin",
-          "begin": "\"\"\"",
-          "end": "\"\"\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.kotlin",
-              "match": "\\\\."
-            }
+            { "name": "constant.character.escape.kotlin", "match": "\\\\." }
           ]
         }
       ]
     },
+
+    "interpolation": {
+      "patterns": [
+        { "name": "variable.other.interpolated.kotlin", "match": "\\$[A-Za-z_][A-Za-z0-9_]*" },
+        {
+          "name": "variable.other.interpolated.expression.kotlin",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "patterns": [
+            { "include": "#strings" },
+            { "include": "#numbers" },
+            { "include": "#keywords" },
+            { "include": "#types" },
+            { "include": "#operators" }
+          ]
+        }
+      ]
+    },
+
     "numbers": {
       "patterns": [
+        { "name": "constant.numeric.binary.kotlin",  "match": "\\b0[bB][01_]+\\b" },
+        { "name": "constant.numeric.hex.kotlin",     "match": "\\b0[xX][0-9a-fA-F_]+\\b" },
+        { "name": "constant.numeric.decimal.kotlin", "match": "\\b[0-9](?:[0-9_]*)(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?\\b" }
+      ]
+    },
+
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.kotlin",   "match": "\\b(if|else|when|for|while|do|return|break|continue|throw|try|catch|finally|in|is|as|by|get|set|where)\\b" },
+        { "name": "storage.type.kotlin",      "match": "\\b(package|import|typealias|class|interface|object|fun|val|var|constructor|init|companion)\\b" },
+        { "name": "storage.modifier.kotlin",  "match": "\\b(override|abstract|final|open|enum|sealed|data|inline|noinline|tailrec|external|const|suspend|expect|actual|private|public|internal|protected|lateinit|vararg|crossinline|operator|infix|reified)\\b" },
+        { "name": "constant.language.kotlin", "match": "\\b(true|false|null)\\b" }
+      ]
+    },
+
+    "types": {
+      "patterns": [
+        { "name": "support.type.kotlin", "match": "\\b(Boolean|Byte|Char|Short|Int|Long|Float|Double|String|Array|List|MutableList|Set|MutableSet|Map|MutableMap|Nothing|Unit|Any)\\b" }
+      ]
+    },
+
+    "annotations": {
+      "patterns": [
         {
-          "name": "constant.numeric.kotlin",
-          "match": "\\b([0-9]+\\.?[0-9]*([eE][+-]?[0-9]+)?[fFdD]?)\\b"
-        },
-        {
-          "name": "constant.numeric.hex.kotlin",
-          "match": "\\b(0[xX][0-9a-fA-F]+)\\b"
-        },
-        {
-          "name": "constant.numeric.binary.kotlin",
-          "match": "\\b(0[bB][01]+)\\b"
+          "name": "meta.annotation.kotlin",
+          "begin": "@\\[?",
+          "beginCaptures": { "0": { "name": "punctuation.definition.annotation.kotlin" } },
+          "end": "\\]?",
+          "endCaptures":   { "0": { "name": "punctuation.definition.annotation.kotlin" } },
+          "patterns": [
+            { "name": "entity.name.function.annotation.kotlin", "match": "[A-Za-z_][A-Za-z0-9_]*" }
+          ]
         }
       ]
     },
+
+    "functions": {
+      "patterns": [
+        {
+          "match": "\\bfun\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": { "1": { "name": "entity.name.function.kotlin" } }
+        }
+      ]
+    },
+
+    "variables": {
+      "patterns": [
+        {
+          "match": "\\b(val|var)\\s+([A-Za-z_][A-Za-z0-9_]*)(\\s*:\\s*[A-Za-z_][A-Za-z0-9_.<>]*)?",
+          "captures": {
+            "1": { "name": "storage.type.kotlin" },
+            "2": { "name": "variable.other.readwrite.kotlin" },
+            "3": { "name": "entity.name.type.kotlin" }
+          }
+        }
+      ]
+    },
+
     "operators": {
       "patterns": [
         {
           "name": "keyword.operator.kotlin",
-          "match": "(\\+|\\-|\\*|\\/|%|\\+\\+|\\-\\-|==|!=|===|!==|<|>|<=|>=|&&|\\|\\||!|&|\\||\\^|~|<<|>>|>>>|\\+=|\\-=|\\*=|\\/=|%=|&=|\\|=|\\^=|<<=|>>=|>>>=|\\?:|\\?\\.|!!|\\.\\.|until|downTo|step)"
-        }
-      ]
-    },
-    "comments": {
-      "patterns": [
-        {
-          "name": "comment.block.kotlin",
-          "begin": "/\\*",
-          "end": "\\*/"
-        },
-        {
-          "name": "comment.line.double-slash.kotlin",
-          "begin": "//",
-          "end": "$"
+          "match": "(==|!=|===|!==|<=|>=|\\+=|\\-=|\\*=|/=|%=|->|::|\\?\\?|\\?|!!|\\.\\.|\\?\\.|\\?:|<|>|\\+|\\-|\\*|/|%|=|\\.)"
         }
       ]
     }
   }
-} 
+}
