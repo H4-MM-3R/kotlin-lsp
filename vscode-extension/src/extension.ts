@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as net from 'net';
 import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
     TransportKind,
     Executable,
+    StreamInfo,
     RevealOutputChannelOn,
     ErrorAction,
     CloseAction,
@@ -23,15 +25,21 @@ export function activate(context: vscode.ExtensionContext) {
         return;
     }
 
-    // Get server executable path
-    const serverPath = getServerPath(config);
-    if (!serverPath) {
-        vscode.window.showErrorMessage('Kotlin LSP server not found. Please install or configure server path.');
-        return;
+    // Determine transport (TCP or stdio)
+    const useTcp = config.get<boolean>('tcp.enabled');
+    let serverOptions: ServerOptions;
+    if (useTcp) {
+        serverOptions = createTcpServerOptions(config);
+    } else {
+        // Get server executable path
+        const serverPath = getServerPath(config);
+        if (!serverPath) {
+            vscode.window.showErrorMessage('Kotlin LSP server not found. Please install or configure server path.');
+            return;
+        }
+        // Configure server options
+        serverOptions = createServerOptions(serverPath, config);
     }
-
-    // Configure server options
-    const serverOptions: ServerOptions = createServerOptions(serverPath, config);
     
     // Configure client options
     const clientOptions: LanguageClientOptions = {
@@ -84,7 +92,6 @@ export function activate(context: vscode.ExtensionContext) {
             restartServer();
         })
     );
-
     // Start the client and server
     startServer();
 }
@@ -162,6 +169,55 @@ function createServerOptions(serverPath: string, config: vscode.WorkspaceConfigu
     };
 
     return executable;
+}
+
+function createTcpServerOptions(config: vscode.WorkspaceConfiguration): ServerOptions {
+    let host = config.get<string>('tcp.host') || '127.0.0.1';
+    const port = config.get<number>('tcp.port') || 2090;
+    const connectTimeoutMs = 10_000;
+
+    // 0.0.0.0 / :: are listen-only addresses; for client connections use loopback
+    if (host === '0.0.0.0' || host === '::') {
+        host = '127.0.0.1';
+        vscode.window.showWarningMessage('[Kotlin LSP] TCP host 0.0.0.0/:: is for listening; connecting to 127.0.0.1 instead');
+    }
+
+    const streamProvider = (): Promise<StreamInfo> => {
+        return new Promise((resolve, reject) => {
+            const socket = net.connect({ host, port });
+
+            const onError = (err: unknown) => {
+                cleanup();
+                reject(err);
+            };
+
+            const onTimeout = () => {
+                cleanup();
+                reject(new Error(`Connection to ${host}:${port} timed out`));
+            };
+
+            const onConnect = () => {
+                cleanup(false);
+                resolve({ reader: socket, writer: socket });
+            };
+
+            const cleanup = (destroy: boolean = true) => {
+                socket.removeListener('error', onError);
+                socket.removeListener('timeout', onTimeout);
+                socket.removeListener('connect', onConnect);
+                if (destroy) {
+                    try { socket.destroy(); } catch { /* noop */ }
+                }
+            };
+
+            socket.setTimeout(connectTimeoutMs);
+            socket.once('error', onError);
+            socket.once('timeout', onTimeout);
+            socket.once('connect', onConnect);
+        });
+    };
+
+    return streamProvider;
 }
 
 async function startServer() {

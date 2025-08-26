@@ -66,6 +66,23 @@
           "default": true,
           "description": "Enable/disable Kotlin LSP"
         },
+        "kotlinLsp.tcp.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Connect to an existing Kotlin LSP server over TCP instead of launching a process"
+        },
+        "kotlinLsp.tcp.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "TCP host for the Kotlin LSP server (used when tcp.enabled is true)"
+        },
+        "kotlinLsp.tcp.port": {
+          "type": "number",
+          "default": 2090,
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "TCP port for the Kotlin LSP server (used when tcp.enabled is true)"
+        },
         "kotlinLsp.serverPath": {
           "type": "string",
           "description": "Path to the Kotlin LSP executable. If not set, will look for kotlin-lsp in PATH or use bundled version."
