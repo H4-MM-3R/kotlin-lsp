@@ -15,6 +15,8 @@ import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import org.kotlinlsp.common.read
 import java.io.File
 import java.nio.file.Path
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolutePathString
 
 class SourceModule(
@@ -39,12 +41,29 @@ class SourceModule(
             .map { "file://${it.absolutePath}" }
             .mapNotNull { project.read { VirtualFileManager.getInstance().findFileByUrl(it) } }
 
+    private val extraFiles: MutableSet<VirtualFile> = Collections.newSetFromMap(ConcurrentHashMap())
+
+    fun addFileToContentScope(file: VirtualFile) {
+        // Only add Kotlin/Java files under this module's roots
+        val isKtOrJava = file.extension.equals("kt", true) || file.extension.equals("java", true)
+        if (!isKtOrJava) return
+        extraFiles.add(file)
+    }
+
     override val kaModule: KaModule by lazy {
         object : KaSourceModule, KaModuleBase() {
-            private val scope: GlobalSearchScope by lazy {
-                val files = computeFiles(extended = true).toList()
+            private val baseFiles: Set<VirtualFile> by lazy { computeFiles(extended = true).toSet() }
 
-                GlobalSearchScope.filesScope(this@SourceModule.project, files)
+            private val scope: GlobalSearchScope by lazy {
+                object : GlobalSearchScope(this@SourceModule.project) {
+                    override fun contains(file: VirtualFile): Boolean {
+                        return baseFiles.contains(file) || extraFiles.contains(file)
+                    }
+
+                    override fun isSearchInModuleContent(aModule: com.intellij.openapi.module.Module): Boolean = true
+                    override fun isSearchInLibraries(): Boolean = false
+                    override fun compare(file1: VirtualFile, file2: VirtualFile): Int = 0
+                }
             }
 
             @KaPlatformInterface

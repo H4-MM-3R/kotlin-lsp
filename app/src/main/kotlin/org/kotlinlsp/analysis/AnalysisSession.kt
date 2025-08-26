@@ -198,6 +198,8 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
         val ktFile = loadKtFile(path) ?: return
         index.openKtFile(path, ktFile)
 
+        // Register the file into the owning module's content scope so Analysis API can resolve it
+        index.addVirtualFileToModuleScope(ktFile.virtualFile)
         updateDiagnostics(ktFile)
     }
 

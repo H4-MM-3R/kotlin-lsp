@@ -5,6 +5,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
 import org.jetbrains.kotlin.psi.KtFile
+import org.kotlinlsp.analysis.modules.SourceModule
 import org.kotlinlsp.analysis.modules.Module
 import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.common.read
@@ -110,5 +111,17 @@ class Index(
 
     fun getAllSourceKtFiles(): List<KtFile> {
         return sourceFileCache
+    }
+
+    fun addVirtualFileToModuleScope(virtualFile: VirtualFile) {
+        modules.asFlatSequence()
+            .filterIsInstance<SourceModule>()
+            .firstOrNull { module ->
+                // Rough check: if any of the module's content roots is a prefix of the file path
+                // we treat it as belonging to that module
+                val path = virtualFile.url
+                module.contentRoots.any { path.startsWith("file://${it.toFile().absolutePath}") }
+            }
+            ?.addFileToContentScope(virtualFile)
     }
 }
