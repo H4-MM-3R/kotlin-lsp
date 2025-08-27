@@ -57,7 +57,8 @@ fun goToImplementationAction(ktFile: KtFile, position: Position): List<Location>
         // Get inheritors and search for overriding declarations
         directInheritorsProvider
             .getDirectKotlinInheritorsByClassId(containingClassId, module, scope, true)
-            .distinctBy { it.getClassId() }
+            // Distinct by stable PSI location to keep multiple anonymous objects
+            .distinctBy { it.containingFile.virtualFile.url + ":" + it.textRange.startOffset }
             .mapNotNull { ktClass ->
                 val matchingDeclarations = ktClass.declarations.filter { it.name == baseShortName.asString() }
                 if (matchingDeclarations.isEmpty()) return@mapNotNull null

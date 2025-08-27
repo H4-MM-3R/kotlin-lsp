@@ -68,7 +68,20 @@ class DirectInheritorsProvider: KotlinDirectInheritorsProvider {
         if (possibleInheritors.isEmpty()) {
             return@profile emptyList()
         }
-        possibleInheritors.filter { isValidInheritor(it, baseFirClass, scope, includeLocalInheritors) }
+
+        // Handle both regular classes/objects (with ClassId) and anonymous/local objects (no ClassId)
+        val (withClassId, withoutClassId) = possibleInheritors.partition { it.getClassId() != null }
+
+        val validatedWithId = withClassId.filter { isValidInheritor(it, baseFirClass, scope, includeLocalInheritors) }
+
+        // For anonymous objects and local objects lacking ClassId, rely on prior super-name matching and scope/local filters
+        val validatedAnonymous = withoutClassId.filter { candidate ->
+            if (!includeLocalInheritors && candidate.isLocal) return@filter false
+            if (!scope.contains(candidate)) return@filter false
+            true
+        }
+
+        (validatedWithId + validatedAnonymous)
     }
 
     // Let's say this operation is not frequently called, if we discover it's not the case we should cache it
