@@ -77,9 +77,9 @@ fun findReferencesAction(ktFile: KtFile, position: Position, index: Index): List
 private fun getFilesToSearch(index: Index, symbolName: String): List<KtFile> {
     val filesMap = mutableMapOf<String, KtFile>()
 
-    index.getAllSourceKtFiles().forEach { file ->
-        filesMap[file.virtualFile.path] = file
-    }
+//    index.getAllSourceKtFiles().forEach { file ->
+//        filesMap[file.virtualFile.path] = file
+//    }
 
     val candidateFiles = index.query { db ->
         db.declarationsDb.prefixSearch<Declaration>(symbolName)
