@@ -3,6 +3,7 @@ package org.kotlinlsp.analysis
 import com.intellij.core.CorePackageIndex
 import com.intellij.mock.MockApplication
 import com.intellij.mock.MockProject
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.roots.PackageIndex
 import com.intellij.openapi.util.Disposer
@@ -17,15 +18,19 @@ import org.eclipse.lsp4j.*
 import org.jetbrains.kotlin.analysis.api.KaImplementationDetail
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.components.KaDiagnosticCheckerFilter
+import org.jetbrains.kotlin.analysis.api.platform.analysisMessageBus
 import org.jetbrains.kotlin.analysis.api.platform.declarations.KotlinAnnotationsResolverFactory
 import org.jetbrains.kotlin.analysis.api.platform.declarations.KotlinDeclarationProviderFactory
 import org.jetbrains.kotlin.analysis.api.platform.declarations.KotlinDirectInheritorsProvider
 import org.jetbrains.kotlin.analysis.api.platform.modification.KaElementModificationType
 import org.jetbrains.kotlin.analysis.api.platform.modification.KaSourceModificationService
+import org.jetbrains.kotlin.analysis.api.platform.modification.KotlinModificationEvent
+import org.jetbrains.kotlin.analysis.api.platform.modification.KotlinModuleOutOfBlockModificationEvent
 import org.jetbrains.kotlin.analysis.api.platform.packages.KotlinPackagePartProviderFactory
 import org.jetbrains.kotlin.analysis.api.platform.packages.KotlinPackageProviderFactory
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinModuleDependentsProvider
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinProjectStructureProvider
+import org.jetbrains.kotlin.analysis.api.projectStructure.KaModule
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.jvm.compiler.*
 import org.jetbrains.kotlin.cli.jvm.index.JavaRoot
@@ -48,6 +53,7 @@ import org.kotlinlsp.actions.hover.hoverAction
 import org.kotlinlsp.actions.renameAction
 import org.kotlinlsp.actions.semanticHighlightingAction
 import org.kotlinlsp.actions.semanticHighlightingRangeAction
+import org.kotlinlsp.analysis.modules.NotUnderContentRootModule
 import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.analysis.registration.Registrar
 import org.kotlinlsp.analysis.registration.lspPlatform
@@ -77,6 +83,7 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     private val buildSystemResolver: BuildSystemResolver
     private val index: Index
     private val codeActionRegistry: CodeActionRegistry
+    private var projectStructureProvider: ProjectStructureProvider
 
     init {
         System.setProperty("java.awt.headless", "true")
@@ -172,7 +179,8 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
         (project.getService(KotlinModuleDependentsProvider::class.java) as ModuleDependentsProvider).setup(
             modules
         )
-        (project.getService(KotlinProjectStructureProvider::class.java) as ProjectStructureProvider).setup(
+        projectStructureProvider = project.getService(KotlinProjectStructureProvider::class.java) as ProjectStructureProvider
+        projectStructureProvider.setup(
             modules,
             project
         )
@@ -197,9 +205,21 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
     fun onOpenFile(path: String) {
         val ktFile = loadKtFile(path) ?: return
         index.openKtFile(path, ktFile)
+        var kaModule: KaModule? = projectStructureProvider.getModule(ktFile, null)
+        if(kaModule !is NotUnderContentRootModule){
+            updateDiagnostics(ktFile)
+            return
+        } else {
+            // Register the file into the owning module's content scope so Analysis API can resolve it
+            index.addVirtualFileToModuleScope(ktFile.virtualFile)
+            kaModule = projectStructureProvider.getModule(ktFile, null)
+        }
 
-        // Register the file into the owning module's content scope so Analysis API can resolve it
-        index.addVirtualFileToModuleScope(ktFile.virtualFile)
+        // Must be published in a write action
+        app.runWriteAction {
+            val bus = project.analysisMessageBus.syncPublisher(KotlinModificationEvent.TOPIC)
+            bus.onModification(KotlinModuleOutOfBlockModificationEvent(kaModule))
+        }
         updateDiagnostics(ktFile)
     }
 
