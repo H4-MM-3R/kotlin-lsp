@@ -12,27 +12,25 @@ import org.kotlinlsp.index.db.adapters.put
 
 fun indexSourceFile(project: Project, virtualFile: VirtualFile, db: Database){
     if (virtualFile.isDirectory) return
+    if (db.sourceFilesDb.get<String>(virtualFile.url) != null) return
 
     val ext = virtualFile.extension?.lowercase()
     if (ext != "kt" && ext != "java") return
+    db.sourceFilesDb.put<String>(virtualFile.url, "1")
 
-    val pair = project.read {
-        val psiFile = PsiManager.getInstance(project).findFile(virtualFile) ?: return@read null
-        when (psiFile) {
-            is KtFile -> psiFile.packageFqName.asString() to psiFile.virtualFile.url
-            is PsiJavaFile -> {
-                psiFile.packageName to psiFile.virtualFile.url
-            }
-            else -> null
+    val psiFile = project.read { PsiManager.getInstance(project).findFile(virtualFile) }!!
+    val packageFqName = when (psiFile) {
+        is KtFile -> psiFile.packageFqName.asString()
+        is PsiJavaFile -> {
+            psiFile.packageName
         }
-    } ?: return
+        else -> return
+    }
+    if (db.sourcesDb.get<List<String>>(packageFqName)?.contains(psiFile.virtualFile.url) == true) return
 
-    val (packageFqName, fileUrl) = pair
-    val key = packageFqName
-
-    val existing: MutableList<String> = db.sourcesDb.get<List<String>>(key)?.toMutableList() ?: mutableListOf()
-    if (!existing.contains(fileUrl)) {
-        existing.add(fileUrl)
-        db.sourcesDb.put(key, existing)
+    val existing: MutableList<String> = db.sourcesDb.get<List<String>>(packageFqName)?.toMutableList() ?: mutableListOf()
+    if (!existing.contains(psiFile.virtualFile.url)) {
+        existing.add(psiFile.virtualFile.url)
+        db.sourcesDb.put(packageFqName, existing)
     }
 }
