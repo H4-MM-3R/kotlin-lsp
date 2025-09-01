@@ -44,7 +44,7 @@ import org.kotlinlsp.actions.documentSymbolsAction
 import org.kotlinlsp.actions.findReferencesAction
 import org.kotlinlsp.actions.goToDefinitionAction
 import org.kotlinlsp.actions.goToImplementationAction
-import org.kotlinlsp.actions.hoverAction
+import org.kotlinlsp.actions.hover.hoverAction
 import org.kotlinlsp.actions.renameAction
 import org.kotlinlsp.actions.semanticHighlightingAction
 import org.kotlinlsp.actions.semanticHighlightingRangeAction
