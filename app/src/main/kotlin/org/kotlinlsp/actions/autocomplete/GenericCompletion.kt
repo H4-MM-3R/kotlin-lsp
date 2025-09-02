@@ -32,58 +32,58 @@ import org.kotlinlsp.index.queries.getCompletions
 private val newlines = arrayOf("", "\n", "\n\n")
 
 fun autoCompletionGeneric(ktFile: KtFile, offset: Int, index: Index, completingElement: KtElement, prefix: String): Sequence<CompletionItem> {
-    /* TODO: Needs a Better Approach */
-    return emptySequence()
+    // /* TODO: Needs a Better Approach */
+    // return emptySequence()
 
     /**
      * this is soo computationally expensive, which is Crashing/getting stuck for few seconds while typing
      * for " FUN " and some REFERENCE_EXPRESSIONS
      */
-    //    // Get import list and where to add new imports
-    //    val existingImports = ktFile.importList?.children?.filterIsInstance<KtImportDirective>() ?: emptyList()
-    //    val (importInsertionOffset, newlineCount) = if (existingImports.isEmpty()) {
-    //        ktFile.packageDirective?.textRange?.let { it.endOffset to 2 } ?: (ktFile.textRange.startOffset to 0)
-    //    } else {
-    //        existingImports.last().textRange.endOffset to 1
-    //    }
-    //    val importInsertionPosition =
-    //        StringUtil.offsetToLineColumn(ktFile.text, importInsertionOffset).let { Position(it.line, it.column) }
-    //
-    //    val externalCompletions = index
-    //        .getCompletions(prefix) // TODO: ThisRef
-    //        .map { decl ->
-    //            val additionalEdits = mutableListOf<TextEdit>()
-    //
-    //            // Add the import if not there yet
-    //            if (decl is Declaration.Class) {
-    //                val exists = existingImports.any {
-    //                    it.importedFqName?.asString() == decl.fqName
-    //                }
-    //                if (!exists) {
-    //                    val importText = "import ${decl.fqName}"
-    //                    val edit = TextEdit().apply {
-    //                        range = Range(importInsertionPosition, importInsertionPosition)
-    //                        newText = "${newlines[newlineCount]}$importText"
-    //                    }
-    //                    additionalEdits.add(edit)
-    //                }
-    //            }
-    //
-    //            val (inserted, insertionType) = decl.insertInfo()
-    //
-    //            CompletionItem().apply {
-    //                label = decl.name
-    //                labelDetails = decl.details()
-    //                kind = decl.completionKind()
-    //                insertText = inserted
-    //                insertTextFormat = insertionType
-    //                additionalTextEdits = additionalEdits
-    //            }
-    //        }
-    //
-    //    val localCompletions = fetchLocalCompletions(ktFile, offset, completingElement, prefix)
-    //
-    //    return localCompletions.plus(externalCompletions).asSequence()
+       // Get import list and where to add new imports
+       val existingImports = ktFile.importList?.children?.filterIsInstance<KtImportDirective>() ?: emptyList()
+       val (importInsertionOffset, newlineCount) = if (existingImports.isEmpty()) {
+           ktFile.packageDirective?.textRange?.let { it.endOffset to 2 } ?: (ktFile.textRange.startOffset to 0)
+       } else {
+           existingImports.last().textRange.endOffset to 1
+       }
+       val importInsertionPosition =
+           StringUtil.offsetToLineColumn(ktFile.text, importInsertionOffset).let { Position(it.line, it.column) }
+
+       val externalCompletions = index
+           .getCompletions(prefix) // TODO: ThisRef
+           .map { decl ->
+               val additionalEdits = mutableListOf<TextEdit>()
+
+               // Add the import if not there yet
+               if (decl is Declaration.Class) {
+                   val exists = existingImports.any {
+                       it.importedFqName?.asString() == decl.fqName
+                   }
+                   if (!exists) {
+                       val importText = "import ${decl.fqName}"
+                       val edit = TextEdit().apply {
+                           range = Range(importInsertionPosition, importInsertionPosition)
+                           newText = "${newlines[newlineCount]}$importText"
+                       }
+                       additionalEdits.add(edit)
+                   }
+               }
+
+               val (inserted, insertionType) = decl.insertInfo()
+
+               CompletionItem().apply {
+                   label = decl.name
+                   labelDetails = decl.details()
+                   kind = decl.completionKind()
+                   insertText = inserted
+                   insertTextFormat = insertionType
+                   additionalTextEdits = additionalEdits
+               }
+           }
+
+       val localCompletions = fetchLocalCompletions(ktFile, offset, completingElement, prefix)
+
+       return localCompletions.plus(externalCompletions).asSequence()
 }
 
 

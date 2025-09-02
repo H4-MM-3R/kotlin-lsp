@@ -150,54 +150,52 @@ private fun KaSession.analyzeDeclaration(path: String, dcl: KtDeclaration): Decl
             )
         }
 
-        is KtPrimaryConstructor -> {
-            val clazz = dcl.parentOfType<KtClass>() ?: return null
-            val constructorName = clazz.name ?: return null
-            
-            Declaration.Constructor(
-                constructorName,
-                clazz.fqName?.asString() ?: "",
-                path,
-                startOffset,
-                endOffset,
-                dcl.valueParameters.map {
-                    Declaration.Constructor.Parameter(
-                        it.nameAsSafeName.asString(),
-                        it.returnType.toString()
-                    )
-                },
-                clazz.fqName?.asString() ?: ""
-            )
-        }
-
-        is KtObjectDeclaration -> {
-            Declaration.Class(
-                name,
-                Declaration.Class.Type.OBJECT,
-                dcl.fqName?.asString() ?: "",
-                path,
-                startOffset,
-                endOffset
-            )
-        }
-
-        is KtTypeParameter -> {
-            val parentClass = dcl.parentOfType<KtClassOrObject>()
-            val parentFunction = dcl.parentOfType<KtNamedFunction>()
-            val parentFqName = parentClass?.fqName?.asString() ?: parentFunction?.fqName?.asString() ?: ""
-
-            Declaration.TypeParameter(
-                name,
-                path,
-                startOffset,
-                endOffset,
-                parentFqName
-            )
-        }
+//        is KtPrimaryConstructor -> {
+//            val clazz = dcl.parentOfType<KtClass>() ?: return null
+//            val constructorName = clazz.name ?: return null
+//
+//            Declaration.Constructor(
+//                constructorName,
+//                clazz.fqName?.asString() ?: "",
+//                path,
+//                startOffset,
+//                endOffset,
+//                dcl.valueParameters.map {
+//                    Declaration.Constructor.Parameter(
+//                        it.nameAsSafeName.asString(),
+//                        it.returnType.toString()
+//                    )
+//                },
+//                clazz.fqName?.asString() ?: ""
+//            )
+//        }
+//
+//        is KtObjectDeclaration -> {
+//            Declaration.Class(
+//                name,
+//                Declaration.Class.Type.OBJECT,
+//                dcl.fqName?.asString() ?: "",
+//                path,
+//                startOffset,
+//                endOffset
+//            )
+//        }
+//
+//        is KtTypeParameter -> {
+//            val parentClass = dcl.parentOfType<KtClassOrObject>()
+//            val parentFunction = dcl.parentOfType<KtNamedFunction>()
+//            val parentFqName = parentClass?.fqName?.asString() ?: parentFunction?.fqName?.asString() ?: ""
+//
+//            Declaration.TypeParameter(
+//                name,
+//                path,
+//                startOffset,
+//                endOffset,
+//                parentFqName
+//            )
+//        }
 
         else -> {
-            // TODO Handle other declarations
-            warn("Declaration type not handled: ${dcl::class.simpleName}")
             null
         }
     }

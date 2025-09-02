@@ -64,6 +64,7 @@ fun Database.file(path: String): File? {
             lastModified = Instant.ofEpochMilli(it.lastModified),
             modificationStamp = it.modificationStamp,
             indexed = it.indexed,
+            declarationKeys = it.declarationKeys.toMutableList()
         )
     }
 }
