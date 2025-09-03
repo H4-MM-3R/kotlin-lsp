@@ -29,6 +29,10 @@ fun autocompleteAction(ktFile: KtFile, offset: Int, index: Index): Sequence<Comp
         }
     }
 
+    if(completingElement is KtDotQualifiedExpression){
+        autoCompletionDotExpression(ktFile, offset, index, completingElement, prefix)
+    }
+
     if (completingElement is KtFile) {
         if(leaf is KtPackageDirective){
             return autoCompletionPackage(ktFile, offset, index, leaf)
