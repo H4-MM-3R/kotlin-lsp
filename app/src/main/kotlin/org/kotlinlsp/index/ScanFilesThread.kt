@@ -25,9 +25,9 @@ class ScanFilesThread(
             // Scan phase - hyper-fast flow processing
             val sourceFiles = modules.asFlatSequence()
                 .filter { it.isSourceModule }
-                .map { it.computeFiles(extended = true) }
-                .flatten()
+                .flatMap { it.computeFiles(extended = true) }
                 .takeWhile { !shouldStop.get() }
+                .filter { it.extension == "kt" || it.extension == "java" }
                 .toList()
 
             @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,10 +44,12 @@ class ScanFilesThread(
 
             val sources = modules.asFlatSequence()
                 .filter { it.sourceRoots != null && it is LibraryModule }
-                .map {
-                    it as LibraryModule
+                .flatMap {
+                    (it as LibraryModule)
                     it.computeSources()
-                }.flatten().takeWhile { !shouldStop.get() }.toList()
+                }.takeWhile { !shouldStop.get() }
+                .filter { it.extension == "kt" || it.extension == "java" }
+                .toList()
             info("${sources.size} sources to index, starting indexing...")
 
             @OptIn(ExperimentalCoroutinesApi::class)
@@ -65,9 +67,12 @@ class ScanFilesThread(
             // Index phase - hyper-fast flow processing
             val allFiles = modules.asFlatSequence()
                 .sortedByDescending { it.isSourceModule }
-                .map { it.computeFiles(extended = true) }
-                .flatten()
+                .flatMap { it.computeFiles(extended = true) }
                 .takeWhile { !shouldStop.get() }
+                .filter {
+                    if(it.url.startsWith("file://")) it.extension == "kt"
+                    else it.extension == "class"
+                }
                 .toList()
 
             info("${allFiles.size} files to index, starting indexing...")

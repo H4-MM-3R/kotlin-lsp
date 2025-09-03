@@ -16,6 +16,9 @@ sealed class Declaration() {
     data class Function(
         override val name: String,
         val fqName: String,
+        val isExtension: Boolean,
+        val isTopLevel: Boolean,
+        val isPrivate: Boolean,
         override val file: String,
         override val startOffset: Int,
         override val endOffset: Int,
@@ -35,6 +38,8 @@ sealed class Declaration() {
     @SerialName("class")
     data class Class(
         override val name: String,
+        val isTopLevel: Boolean,
+        val isPrivate: Boolean,
         val type: Type,
         val fqName: String,
         override val file: String,
@@ -67,6 +72,8 @@ sealed class Declaration() {
     data class Field(
         override val name: String,
         val fqName: String,
+        val isExtension: Boolean,
+        val isTopLevel: Boolean,
         override val file: String,
         override val startOffset: Int,
         override val endOffset: Int,

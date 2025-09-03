@@ -15,6 +15,10 @@ fun autocompleteAction(ktFile: KtFile, offset: Int, index: Index): Sequence<Comp
         leaf = leaf.prevSibling ?: break
     }
 
+    if(leaf is KtProperty){
+        leaf = leaf.children.find { it is KtNameReferenceExpression } ?: leaf
+    }
+
     val prefix = leaf.text.substring(0, offset - leaf.textRange.startOffset)
     val completingElement = leaf.parentOfType<KtElement>() ?: ktFile
     if (completingElement is KtNameReferenceExpression) {

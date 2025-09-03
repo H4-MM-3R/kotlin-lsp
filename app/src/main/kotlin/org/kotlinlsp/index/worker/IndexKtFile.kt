@@ -6,6 +6,10 @@ import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.isAbstract
+import org.jetbrains.kotlin.psi.psiUtil.isExtensionDeclaration
+import org.jetbrains.kotlin.psi.psiUtil.isPrivate
+import org.jetbrains.kotlin.psi.psiUtil.isProtected
+import org.jetbrains.kotlin.psi.psiUtil.isTopLevelKtOrJavaMember
 import org.kotlinlsp.common.read
 import org.kotlinlsp.common.warn
 import org.kotlinlsp.index.db.*
@@ -62,6 +66,9 @@ private fun KaSession.analyzeDeclaration(path: String, dcl: KtDeclaration): Decl
             Declaration.Function(
                 name,
                 dcl.fqName?.asString() ?: "",
+                dcl.isExtensionDeclaration(),
+                dcl.isTopLevel,
+                dcl.isPrivate() || dcl.isProtected(),
                 path,
                 startOffset,
                 endOffset,
@@ -103,6 +110,8 @@ private fun KaSession.analyzeDeclaration(path: String, dcl: KtDeclaration): Decl
 
             Declaration.Class(
                 name,
+                dcl.isTopLevelKtOrJavaMember(),
+                dcl.isPrivate() || dcl.isProtected(),
                 type,
                 dcl.fqName?.asString() ?: "",
                 path,
@@ -119,6 +128,8 @@ private fun KaSession.analyzeDeclaration(path: String, dcl: KtDeclaration): Decl
             Declaration.Field(
                 name,
                 dcl.fqName?.asString() ?: "",
+                dcl.isExtensionDeclaration(),
+                dcl.isTopLevelKtOrJavaMember(),
                 path,
                 startOffset,
                 endOffset,
@@ -132,6 +143,8 @@ private fun KaSession.analyzeDeclaration(path: String, dcl: KtDeclaration): Decl
             val clazz = dcl.parentOfType<KtClass>() ?: return Declaration.Field(
                 name,
                 dcl.fqName?.asString() ?: "",
+                dcl.isExtensionDeclaration(),
+                dcl.isTopLevelKtOrJavaMember(),
                 path,
                 startOffset,
                 endOffset,
@@ -142,6 +155,8 @@ private fun KaSession.analyzeDeclaration(path: String, dcl: KtDeclaration): Decl
             Declaration.Field(
                 name,
                 dcl.fqName?.asString() ?: "",
+                dcl.isExtensionDeclaration(),
+                dcl.isTopLevelKtOrJavaMember(),
                 path,
                 startOffset,
                 endOffset,

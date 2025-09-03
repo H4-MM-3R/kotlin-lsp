@@ -32,6 +32,17 @@ fun autoCompletionImport(ktFile: KtFile, offset: Int, index: Index, leaf: PsiEle
             .mapNotNull { path -> db.file(path) }
             .flatMap { file -> file.declarationKeys.asSequence() }
             .mapNotNull { key -> db.declarationsDb.get<Declaration>(key) }
+            .filter{
+                if(it is Declaration.Function){
+                    it.isTopLevel
+                } else if (it is Declaration.Field) {
+                    it.isTopLevel
+                } else if (it is Declaration.Class){
+                    it.isTopLevel
+                } else {
+                    true
+                }
+            }
             .distinctBy { it.name }
             .map { decl ->
                 CompletionItem().apply {

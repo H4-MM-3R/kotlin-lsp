@@ -10,27 +10,51 @@ fun indexClassFile(project: Project, virtualFile: VirtualFile, db: Database) {
     if (virtualFile.isDirectory || virtualFile.extension != "class") return
 
     // Extract the path inside the JAR/URL and convert it to a JVM internal name
-    // Examples:
-    //  • jar://path/to/lib.jar!/java/util/ArrayList.class -> java/util/ArrayList
-    //  • file:///.../out/production/MyClass.class        -> .../MyClass
     val internalPath = virtualFile.url
         .substringAfter("!/")         // strip jar prefix if present
         .removePrefix("file://")
         .removeSuffix(".class")
         .trimStart('/')
 
-    // Build the fully-qualified class name and ignore inner/anonymous classes
+    // Ignore inner/anonymous classes
+    if (internalPath.contains("$")) return
+
     val fqName = internalPath
         .replace('/', '.')
         .replace('\\', '.')
-        .substringBefore('$')
 
     if (fqName.isBlank()) return
 
     val simpleName = fqName.substringAfterLast('.')
 
+    // Filter out noisy or meaningless classes:
+    //  - Kotlin file facades (FooKt), metadata classes (package-info, module-info)
+    //  - Obfuscated/lowercase names (a, b, k, kg, km…)
+    //  - Very short names (<= 1 char)
+    //  - Known noisy packages (fastutil, checkerframework.units.qual, etc.)
+    val noisyPackages = listOf(
+        "it.unimi.dsi.fastutil",
+        "org.checkerframework.checker.units.qual"
+    )
+
+    val looksLikeApiClass =
+        simpleName.isNotEmpty() &&
+        simpleName[0].isUpperCase() &&
+        simpleName.length > 1
+
+    if (!looksLikeApiClass ||
+        simpleName.endsWith("Kt") ||
+        simpleName == "package-info" ||
+        simpleName == "module-info" ||
+        noisyPackages.any { fqName.startsWith(it) }
+    ) {
+        return
+    }
+
     val declaration = Declaration.Class(
         name = simpleName,
+        isTopLevel = true,
+        isPrivate = true,
         type = Declaration.Class.Type.CLASS,
         fqName = fqName,
         file = virtualFile.url,

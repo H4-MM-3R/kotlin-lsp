@@ -51,6 +51,14 @@ fun autoCompletionGeneric(ktFile: KtFile, offset: Int, index: Index, completingE
 
        val externalCompletions = index
            .getCompletions(prefix) // TODO: ThisRef
+           .filter { decl ->
+               when(decl){
+                   is Declaration.Class -> decl.isTopLevel && !decl.isPrivate
+                   is Declaration.Field -> decl.isTopLevel
+                   is Declaration.Function -> decl.isTopLevel && !decl.isExtension && !decl.isPrivate
+                   else -> true
+               }
+           }
            .map { decl ->
                val additionalEdits = mutableListOf<TextEdit>()
 
@@ -81,24 +89,33 @@ fun autoCompletionGeneric(ktFile: KtFile, offset: Int, index: Index, completingE
                }
            }
 
-       val localCompletions = fetchLocalCompletions(ktFile, offset, completingElement, prefix)
+       val localCompletions = fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "LocalScope")
+       val fileCompletions =  fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "TypeScope")
+//       val otherCompletions = fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "DefaultStartImportingScope")
 
-       return localCompletions.plus(externalCompletions).asSequence()
+       return localCompletions.plus(fileCompletions).plus(externalCompletions).toSet().asSequence()
 }
 
-
 @OptIn(KaExperimentalApi::class)
-private fun fetchLocalCompletions(
+private fun fetchCompletionsFromScope(
     ktFile: KtFile,
     offset: Int,
     completingElement: KtElement,
-    prefix: String
+    prefix: String,
+    scopeKind: String
 ): List<CompletionItem> = analyze(ktFile) {
     ktFile
         .scopeContext(completingElement)
         .scopes
         .asSequence()
-        .filter { it.kind is KaScopeKind.LocalScope }
+        .filter {
+            when(scopeKind){
+               "LocalScope" -> it.kind is KaScopeKind.LocalScope
+                "TypeScope" -> it.kind is KaScopeKind.TypeScope
+                "DefaultStartImportingScope" -> it.kind is KaScopeKind.DefaultStarImportingScope
+                else -> false
+            }
+        }
         .flatMap { it.scope.declarations }
         .filter { it.name.toString().startsWith(prefix) }
         .mapNotNull { if (it.psi != null) Pair(it, it.psi!!) else null }
