@@ -8,8 +8,8 @@ It's developed as part of the [Kotlin LSP Project](https://kotlinlang.org/docs/g
 
 You can download the latest release assets from the [GitHub Releases](https://github.com/h4-mm-3r/kotlin-lsp/releases) page.
 
-*   **VSCode Extension (`.vsix`)**: [kotlin-lsp-vscode-0.1.15.vsix](https://github.com/h4-mm-3r/kotlin-lsp/releases/download/v1.5/kotlin-lsp-vscode-1.5.0.vsix)
-*   **Language Server Executable (`.zip`)**: [kotlin-lsp-0.1.15.zip](https://github.com/H4-MM-3R/kotlin-lsp/releases/download/v1.5/kotlin-lsp-1.5.zip)
+*   **VSCode Extension (`.vsix`)**: [kotlin-lsp-vscode-2.0.0.vsix](https://github.com/h4-mm-3r/kotlin-lsp/releases/download/v2.0/kotlin-lsp-vscode-2.0.0.vsix)
+*   **Language Server Executable (`.zip`)**: [kotlin-lsp-2.0.0.zip](https://github.com/H4-MM-3R/kotlin-lsp/releases/download/v2.0/kotlin-lsp-2.0.zip)
 
 
 ## Installation:
