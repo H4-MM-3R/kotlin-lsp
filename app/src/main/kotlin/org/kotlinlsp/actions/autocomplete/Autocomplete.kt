@@ -33,6 +33,9 @@ fun autocompleteAction(ktFile: KtFile, offset: Int, index: Index): Sequence<Comp
         if(leaf is KtPackageDirective){
             return autoCompletionPackage(ktFile, offset, index, leaf)
         }
+        if(leaf is KtImportDirective){
+            return autoCompletionImport(ktFile, offset, index, leaf)
+        }
         return autocompletionCommonCompletion()
     }
 
