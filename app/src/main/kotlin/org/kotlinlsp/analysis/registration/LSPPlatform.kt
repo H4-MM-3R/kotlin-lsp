@@ -4,6 +4,8 @@ import com.intellij.codeInsight.ExternalAnnotationsManager
 import com.intellij.codeInsight.InferredAnnotationsManager
 import com.intellij.core.CoreJavaFileManager
 import com.intellij.openapi.editor.impl.DocumentWriteAccessGuard
+import com.intellij.openapi.fileTypes.BinaryFileTypeDecompilers
+import com.intellij.openapi.project.DefaultProjectFactory
 import com.intellij.psi.ClassTypePointerFactory
 import com.intellij.psi.PsiElementFinder
 import com.intellij.psi.SmartPointerManager
@@ -104,6 +106,8 @@ fun Registrar.lspPlatform() {
         registerService(KotlinPackageProviderFactory::class.java, PackageProviderFactory::class.java)
         registerService(KotlinPackageProviderMerger::class.java, PackageProviderMerger::class.java)
         registerService(KotlinPackagePartProviderFactory::class.java, PackagePartProviderFactory::class.java)
+        registerService(KotlinStubBuilder::class.java, KotlinStubBuilder(project))
+        registerService(JavaStubBuilder::class.java, JavaStubBuilder(project))
     }
     with(PsiElementFinder.EP.getPoint(project)) {
         registerExtension(JavaElementFinder(project), disposable)
@@ -113,6 +117,8 @@ fun Registrar.lspPlatform() {
         registerService(FileAttributeService::class.java, DummyFileAttributeService::class.java)
         registerService(KotlinAnalysisPermissionOptions::class.java, AnalysisPermissionOptions::class.java)
         registerService(ClsKotlinBinaryClassCache::class.java)
+        registerService(BinaryFileTypeDecompilers::class.java, BinaryFileTypeDecompilers::class.java)
+        registerService(DefaultProjectFactory::class.java, DefaultProjectFactoryImpl(project))
     }
 }
 
