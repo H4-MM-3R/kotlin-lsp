@@ -89,11 +89,12 @@ fun autoCompletionGeneric(ktFile: KtFile, offset: Int, index: Index, completingE
                }
            }
 
-       val localCompletions = fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "LocalScope")
+//       val localCompletions = fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "LocalScope")
        val fileCompletions =  fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "TypeScope")
-       val otherCompletions = fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "DefaultStartImportingScope")
+//       val otherCompletions = fetchCompletionsFromScope(ktFile, offset, completingElement, prefix, "DefaultStartImportingScope")
 
-       return localCompletions.plus(fileCompletions).plus(externalCompletions).plus(otherCompletions).toSet().asSequence()
+//       return localCompletions.plus(fileCompletions).plus(externalCompletions).plus(otherCompletions).toSet().asSequence()
+    return externalCompletions.plus(fileCompletions)
 }
 
 @OptIn(KaExperimentalApi::class)

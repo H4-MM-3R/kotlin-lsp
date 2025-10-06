@@ -1,10 +1,7 @@
 package org.kotlinlsp.index.worker
 
-import com.intellij.ide.highlighter.JavaClassFileType
-import com.intellij.openapi.fileTypes.BinaryFileTypeDecompilers
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.impl.compiled.ClassFileDecompiler
 import com.intellij.psi.util.parentOfType
 import org.jetbrains.kotlin.analysis.decompiler.stub.file.ClsKotlinBinaryClassCache
 import org.jetbrains.kotlin.psi.KtClass
@@ -22,45 +19,68 @@ import org.jetbrains.kotlin.psi.stubs.impl.KotlinPropertyStubImpl
 import org.kotlinlsp.analysis.services.JavaStubBuilder
 import org.kotlinlsp.analysis.services.KotlinStubBuilder
 import org.kotlinlsp.index.db.*
+import java.net.URI
+import java.nio.file.Paths
 import java.time.Instant
+import kotlin.io.path.Path
+import kotlin.io.path.appendText
 
 fun indexClassFile(project: Project, virtualFile: VirtualFile, db: Database) {
     // Only process .class files
     if (virtualFile.isDirectory || virtualFile.extension != "class") return
-
+    
+    // CRITICAL: Use virtualFile.url consistently (not .path)
+    if(db.file(virtualFile.url)?.indexed == true) return
+    
+    // PERFORMANCE: Fast path - extract FQN from path first
+    val internalPath = virtualFile.url
+        .substringAfter("!/")
+        .removePrefix("file://")
+        .removeSuffix(".class")
+        .trimStart('/')
+    
+    // Skip inner/anonymous classes
+    if (internalPath.contains("$")) return
+    
+    val fqName = internalPath.replace('/', '.').replace('\\', '.')
+    if (fqName.isBlank()) return
+    
+    val simpleName = fqName.substringAfterLast('.')
+    
     val declarations = mutableListOf<Declaration>()
-    val kotlinStubBuilder = KotlinStubBuilder.instance(project);
-    val javaStubBuilder = JavaStubBuilder.instance(project);
+
+    // Full stub-based indexing for important API classes
+    val kotlinStubBuilder = KotlinStubBuilder.instance(project)
+    val javaStubBuilder = JavaStubBuilder.instance(project)
     val binaryClassCache = ClsKotlinBinaryClassCache.getInstance()
 
-    BinaryFileTypeDecompilers.getInstance().addExplicitExtension(JavaClassFileType.INSTANCE, ClassFileDecompiler())
-
     val stub = kotlinStubBuilder.createStub(virtualFile, binaryClassCache) ?: javaStubBuilder.createStub(virtualFile, binaryClassCache)
-    var fqName = ""
 
     if (stub != null) {
         val children = stub.childrenStubs
         children.forEach { childStub ->
             when(childStub){
                 is KotlinFunctionStubImpl -> {
-                    Declaration.Function(
-                        childStub.name,
-                        childStub.getFqName().toString(),
-                        childStub.isExtension(),
-                        childStub.isTopLevel(),
-                        childStub.psi.isPrivate() || childStub.psi.isProtected(),
-                        virtualFile.url,
-                        childStub.psi.textOffset,
-                        childStub.psi.textOffset + childStub.name.length,
-                        childStub.psi.valueParameters.map {
-                            Declaration.Function.Parameter(
-                                it.nameAsSafeName.asString(),
-                                it.typeReference?.getShortTypeText() ?: ""
-                            )
-                        },
-                        childStub.psi.typeReference?.getShortTypeText() ?: "",
-                        "",
-                        childStub.psi.receiverTypeReference?.getShortTypeText() ?: ""
+                    declarations.add(
+                        Declaration.Function(
+                            childStub.name,
+                            childStub.getFqName().toString(),
+                            childStub.isExtension(),
+                            childStub.isTopLevel(),
+                            childStub.psi.isPrivate() || childStub.psi.isProtected(),
+                            virtualFile.url,
+                            0,
+                            0 + childStub.name.length,
+                            childStub.psi.valueParameters.map {
+                                Declaration.Function.Parameter(
+                                    it.nameAsSafeName.asString(),
+                                    it.typeReference?.getShortTypeText() ?: ""
+                                )
+                            },
+                            childStub.psi.typeReference?.getShortTypeText() ?: "",
+                            "",
+                            childStub.psi.receiverTypeReference?.getShortTypeText() ?: ""
+                        )
                     )
                 }
                 is KotlinClassStubImpl -> {
@@ -69,8 +89,8 @@ fun indexClassFile(project: Project, virtualFile: VirtualFile, db: Database) {
                             childStub.name ?: "",
                             childStub.getFqName().toString(),
                             virtualFile.url,
-                            childStub.psi.textOffset,
-                            childStub.psi.textOffset + (childStub.name?.length ?: 0),
+                            0,
+                            0 + (childStub.name?.length ?: 0),
                             childStub.parentStub.psi.parentOfType<KtClass>()?.fqName?.asString() ?: ""
                         ))
                         return@forEach
@@ -88,47 +108,36 @@ fun indexClassFile(project: Project, virtualFile: VirtualFile, db: Database) {
                         Declaration.Class.Type.CLASS
                     }
 
-                    Declaration.Class(
-                        childStub.psi.name ?: "",
-                        childStub.psi.isTopLevelKtOrJavaMember(),
-                        childStub.psi.isPrivate() || childStub.psi.isProtected(),
-                        type,
-                        childStub.getFqName().toString(),
-                        virtualFile.url,
-                        childStub.psi.textOffset,
-                        childStub.psi.textOffset + (childStub.name?.length ?: 0),
+                    declarations.add(
+                        Declaration.Class(
+                            childStub.psi.name ?: "",
+                            childStub.psi.isTopLevelKtOrJavaMember(),
+                            childStub.psi.isPrivate() || childStub.psi.isProtected(),
+                            type,
+                            childStub.getFqName().toString(),
+                            virtualFile.url,
+                            0,
+                            (childStub.name?.length ?: 0),
+                        )
                     )
 
                 }
                 is KotlinPropertyStubImpl -> {
                     if (childStub.psi.isLocal) return@forEach
-                    val clazz = childStub.psi.parentOfType<KtClass>() ?:
-                    {
-                        declarations.add(
-                            Declaration.Field(
-                                childStub.psi.name ?: "",
-                                childStub.getFqName().toString(),
-                                childStub.psi.isExtensionDeclaration(),
-                                childStub.psi.isTopLevelKtOrJavaMember(),
-                                virtualFile.url,
-                                childStub.psi.textOffset,
-                                childStub.psi.textOffset + (childStub.name?.length ?: 0),
-                                childStub.psi.typeReference?.getShortTypeText() ?: "",
-                                ""
-                            )
+                    val clazz = childStub.psi.parentOfType<KtClass>()
+                    
+                    declarations.add(
+                        Declaration.Field(
+                            childStub.psi.name ?: "",
+                            childStub.getFqName().toString(),
+                            childStub.psi.isExtensionDeclaration(),
+                            childStub.psi.isTopLevelKtOrJavaMember(),
+                            virtualFile.url,
+                            0,
+                            0 + (childStub.name?.length ?: 0),
+                            childStub.psi.typeReference?.getShortTypeText() ?: "",
+                            clazz?.fqName?.asString() ?: ""
                         )
-                    }
-
-                    Declaration.Field(
-                        childStub.psi.name ?: "",
-                        childStub.getFqName().toString(),
-                        childStub.psi.isExtensionDeclaration(),
-                        childStub.psi.isTopLevelKtOrJavaMember(),
-                        virtualFile.url,
-                        childStub.psi.textOffset,
-                        childStub.psi.textOffset + (childStub.name?.length ?: 0),
-                        childStub.psi.typeReference?.getShortTypeText() ?: "",
-                        ""
                     )
                 }
                 is KotlinParameterStubImpl -> {
@@ -136,76 +145,34 @@ fun indexClassFile(project: Project, virtualFile: VirtualFile, db: Database) {
                     val constructor = childStub.psi.parentOfType<KtPrimaryConstructor>() ?: return@forEach
                     val clazz = constructor.parentOfType<KtClass>() ?: return@forEach
 
-                    Declaration.Field(
-                        childStub.name ?: "",
-                        childStub.getFqName().toString(),
-                        childStub.psi.isExtensionDeclaration(),
-                        childStub.psi.isTopLevelKtOrJavaMember(),
-                        virtualFile.url,
-                        childStub.psi.textOffset,
-                        childStub.psi.textOffset + (childStub.name?.length ?: 0),
-                        childStub.psi.typeReference?.getShortTypeText() ?: "",
-                        clazz.fqName?.asString() ?: ""
+                    declarations.add(
+                        Declaration.Field(
+                            childStub.name ?: "",
+                            childStub.getFqName().toString(),
+                            childStub.psi.isExtensionDeclaration(),
+                            childStub.psi.isTopLevelKtOrJavaMember(),
+                            virtualFile.url,
+                            0,
+                            0 + (childStub.name?.length ?: 0),
+                            childStub.psi.typeReference?.getShortTypeText() ?: "",
+                            clazz.fqName?.asString() ?: ""
+                        )
                     )
                 }
             }
         }
-    }
-    else {
-
-        // Extract the path inside the JAR/URL and convert it to a JVM internal name
-        val internalPath = virtualFile.url
-            .substringAfter("!/")         // strip jar prefix if present
-            .removePrefix("file://")
-            .removeSuffix(".class")
-            .trimStart('/')
-
-        // Ignore inner/anonymous classes
-        if (internalPath.contains("$")) return
-
-        fqName = internalPath
-            .replace('/', '.')
-            .replace('\\', '.')
-
-        if (fqName.isBlank()) return
-
-        val simpleName = fqName.substringAfterLast('.')
-
-        // Filter out noisy or meaningless classes:
-        //  - Kotlin file facades (FooKt), metadata classes (package-info, module-info)
-        //  - Obfuscated/lowercase names (a, b, k, kg, km…)
-        //  - Very short names (<= 1 char)
-        //  - Known noisy packages (fastutil, checkerframework.units.qual, etc.)
-        val noisyPackages = listOf(
-            "it.unimi.dsi.fastutil",
-            "org.checkerframework.checker.units.qual"
-        )
-
-        val looksLikeApiClass =
-            simpleName.isNotEmpty() &&
-                    simpleName[0].isUpperCase() &&
-                    simpleName.length > 1
-
-        if (!looksLikeApiClass ||
-            simpleName.endsWith("Kt") ||
-            simpleName == "package-info" ||
-            simpleName == "module-info" ||
-            noisyPackages.any { fqName.startsWith(it) }
-        ) {
-            return
-        }
-
-        val declaration = Declaration.Class(
+    } else {
+        // Stub creation failed - add lightweight class declaration
+        declarations.add(Declaration.Class(
             name = simpleName,
             isTopLevel = true,
-            isPrivate = true,
+            isPrivate = false,
             type = Declaration.Class.Type.CLASS,
             fqName = fqName,
             file = virtualFile.url,
             startOffset = -1,
             endOffset = -1
-        )
-        declarations.add(declaration)
+        ))
     }
 
     db.putDeclarations(declarations)

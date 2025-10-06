@@ -46,9 +46,7 @@ import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.jar.JarFile
 import org.kotlinlsp.common.normalizeUri
-import org.kotlinlsp.index.queries.sourcesForPackage
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 

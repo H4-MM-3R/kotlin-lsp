@@ -63,6 +63,8 @@ import org.kotlinlsp.buildsystem.BuildSystemResolver
 import org.kotlinlsp.common.*
 import org.kotlinlsp.index.Index
 import org.kotlinlsp.index.IndexNotifier
+import com.intellij.openapi.fileTypes.BinaryFileTypeDecompilers
+import com.intellij.ide.highlighter.JavaClassFileType
 
 interface DiagnosticsNotifier {
     fun onDiagnostics(params: PublishDiagnosticsParams)
@@ -197,6 +199,9 @@ class AnalysisSession(private val notifier: AnalysisSessionNotifier, rootPath: S
 
         commandProcessor = app.getService(CommandProcessor::class.java)
         psiDocumentManager = PsiDocumentManager.getInstance(project)
+
+        // This allows both Java and Kotlin .class files to be handled properly
+        BinaryFileTypeDecompilers.getInstance().addExplicitExtension(JavaClassFileType.INSTANCE, CustomClassDecompiler())
 
         // Sync the index in the background
         index.syncIndexInBackground()

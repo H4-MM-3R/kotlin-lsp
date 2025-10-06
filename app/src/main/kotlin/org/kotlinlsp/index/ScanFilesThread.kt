@@ -1,5 +1,6 @@
 package org.kotlinlsp.index
 
+import com.intellij.psi.ClassFileViewProvider
 import org.kotlinlsp.analysis.modules.Module
 import org.kotlinlsp.analysis.modules.asFlatSequence
 import org.kotlinlsp.index.worker.WorkerThread
@@ -9,6 +10,7 @@ import org.kotlinlsp.common.CustomDispatcher
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.jetbrains.kotlin.cli.common.GroupedKtSources
+import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.analysis.modules.LibraryModule
 
 class ScanFilesThread(
@@ -71,8 +73,19 @@ class ScanFilesThread(
                 .takeWhile { !shouldStop.get() }
                 .filter {
                     if(it.url.startsWith("file://")) it.extension == "kt"
-                    else it.extension == "class"
+                    else if (it.extension == "class") !ClassFileViewProvider.isInnerClass(it)
+                    else true
                 }
+                .filterNot { vf ->
+                    val n = vf.name
+                    // Filter out noisy files early
+                    n == "module-info.class" || n == "package-info.class" ||
+                            n.startsWith("LocaleNames_") || n.startsWith("FormatData_") ||
+                            n.startsWith("metal_") || n.startsWith("synth_") || n.startsWith("CurrencyNames_")
+                            // Filter obfuscated single-letter class names and Kotlin metadata
+
+                }
+                .distinctBy { it.url }
                 .toList()
 
             info("${allFiles.size} files to index, starting indexing...")
