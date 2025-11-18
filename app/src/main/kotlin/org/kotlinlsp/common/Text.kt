@@ -10,7 +10,32 @@ import java.nio.file.Paths
 import java.net.URI
 import org.jetbrains.kotlin.psi.KtFile
 
-fun Position.toOffset(ktFile: KtFile): Int = StringUtil.lineColToOffset(ktFile.text, line, character)
+fun Position.toOffset(ktFile: KtFile): Int {
+    val text = ktFile.text
+    if (text.isEmpty()) return 0
+    
+    // Get the lines and ensure bounds checking
+    val lines = text.lines()
+    if (line >= lines.size) {
+        // Position is beyond file, return end of file
+        return text.length
+    }
+    
+    // Check character position is within the line
+    val lineText = lines[line]
+    val safeCharacter = character.coerceIn(0, lineText.length)
+    
+    return try {
+        StringUtil.lineColToOffset(text, line, safeCharacter)
+    } catch (e: IndexOutOfBoundsException) {
+        // Fallback: calculate manually
+        var offset = 0
+        for (i in 0 until line) {
+            offset += lines[i].length + 1 // +1 for newline
+        }
+        offset + safeCharacter.coerceIn(0, lineText.length)
+    }
+}
 
 fun TextRange.toLspRange(ktFile: PsiFile): Range {
     val text = ktFile.text
