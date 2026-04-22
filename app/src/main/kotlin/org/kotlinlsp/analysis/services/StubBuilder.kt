@@ -1,5 +1,15 @@
-// Copyright 2024 Dmitrii Tseiler. Licensed under the Apache 2.0 Licence
-// Modifications by Kumarapu Hemram.
+/*
+ * Copyright 2024 Dmitrii Tseiler
+ * Copyright 2026 Kumarapu Hemram
+ *
+ * Modifications by Kumarapu Hemram
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 @file:OptIn(KaImplementationDetail::class)
 package org.kotlinlsp.analysis.services
