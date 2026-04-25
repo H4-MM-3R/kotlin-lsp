@@ -68,7 +68,7 @@ fun hoverAction(ktFile: KtFile, position: Position, index: Index): Pair<String, 
             docText = symbol.restoreSymbol()!!.psi?.allChildren?.toList()?.find { ele -> ele is KDoc }?.text ?: ""
         }
     }
-    text = "```kotlin\n${formattedText(text)}\n```"
+    text = formattedText(text)
     if(docText.isNotEmpty()){
         text = "$text\n\n---\n\n${formatter.formatDoc(docText)}\n"
     }
