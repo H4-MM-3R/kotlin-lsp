@@ -13,6 +13,7 @@ package org.kotlinlsp.index.worker
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiManager
 import org.jetbrains.kotlin.psi.KtFile
+import org.kotlinlsp.common.error
 import org.kotlinlsp.common.info
 import org.kotlinlsp.common.read
 import org.kotlinlsp.index.Command
@@ -87,7 +88,8 @@ class WorkerThread(
                                 indexSourceFile(project, command.virtualFile, db)
                             }
                         } catch (e: Exception) {
-
+                            error("Failed to index source file ${command.virtualFile.url}: ${e.message}")
+                            error(e.stackTraceToString())
                         }
                     }
                 }
@@ -113,7 +115,8 @@ class WorkerThread(
                                 indexCount.incrementAndGet()
                             }
                         } catch (e: Exception) {
-                            // Silently handle errors to prevent thread pool from dying
+                            error("Failed to index file ${command.virtualFile.url}: ${e.message}")
+                            error(e.stackTraceToString())
                         }
                     }
                 }
