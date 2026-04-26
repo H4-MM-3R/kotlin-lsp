@@ -29,6 +29,7 @@ const val VERSION_KEY = "__version"
 class Database(rootFolder: String) {
     private val cachePath = getCachePath(rootFolder)
     private val packageListLock = ReentrantLock()
+    val artifactsDb: DatabaseAdapter
     val filesDb: DatabaseAdapter
     val packagesDb: DatabaseAdapter
     val declarationsDb: DatabaseAdapter
@@ -50,6 +51,7 @@ class Database(rootFolder: String) {
                 projectDb.put(VERSION_KEY, CURRENT_SCHEMA_VERSION)
             }
 
+            artifactsDb = RocksDBAdapter(cachePath.resolve("artifacts"))
             filesDb = RocksDBAdapter(cachePath.resolve("files"))
             packagesDb = RocksDBAdapter(cachePath.resolve("packages"))
             declarationsDb = RocksDBAdapter(cachePath.resolve("declarations"))
@@ -67,6 +69,7 @@ class Database(rootFolder: String) {
     }
 
     fun close() {
+        artifactsDb.close()
         filesDb.close()
         packagesDb.close()
         declarationsDb.close()
@@ -109,6 +112,7 @@ class Database(rootFolder: String) {
 
     private fun deleteAll() {
         File(cachePath.resolve("project").absolutePathString()).deleteRecursively()
+        File(cachePath.resolve("artifacts").absolutePathString()).deleteRecursively()
         File(cachePath.resolve("files").absolutePathString()).deleteRecursively()
         File(cachePath.resolve("packages").absolutePathString()).deleteRecursively()
         File(cachePath.resolve("declarations").absolutePathString()).deleteRecursively()
