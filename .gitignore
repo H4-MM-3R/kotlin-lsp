@@ -3,6 +3,9 @@
 .idea
 .kotlin
 build
+.settings
+bin
+.project
 
 # LSP
 lsp-dist
