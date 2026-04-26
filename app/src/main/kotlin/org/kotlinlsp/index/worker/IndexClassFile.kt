@@ -40,7 +40,20 @@ fun indexClassFile(project: Project, virtualFile: VirtualFile, db: Database) {
     if (virtualFile.isDirectory || virtualFile.extension != "class") return
     
     // CRITICAL: Use virtualFile.url consistently (not .path)
-    if(db.file(virtualFile.url)?.indexed == true) return
+    val existingFile = db.file(virtualFile.url)
+    val newFile = File(
+        path = virtualFile.url,
+        packageFqName = existingFile?.packageFqName ?: "",
+        lastModified = Instant.ofEpochMilli(virtualFile.timeStamp),
+        modificationStamp = 0L,
+        indexed = true,
+        declarationKeys = mutableListOf()
+    )
+
+    if (
+        File.shouldBeSkipped(existingFile = existingFile, newFile = newFile) &&
+        existingFile?.indexed == true
+    ) return
     
     // PERFORMANCE: Fast path - extract FQN from path first
     val internalPath = virtualFile.url

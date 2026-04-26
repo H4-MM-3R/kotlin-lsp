@@ -10,6 +10,7 @@
 
 package org.kotlinlsp.index
 
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.ClassFileViewProvider
 import org.kotlinlsp.analysis.modules.Module
 import org.kotlinlsp.analysis.modules.asFlatSequence
@@ -22,12 +23,63 @@ import kotlinx.coroutines.flow.*
 import org.jetbrains.kotlin.cli.common.GroupedKtSources
 import org.jetbrains.kotlin.psi.KtFile
 import org.kotlinlsp.analysis.modules.LibraryModule
+import org.kotlinlsp.index.db.Database
+import org.kotlinlsp.index.db.File
+import org.kotlinlsp.index.db.adapters.get
+import org.kotlinlsp.index.db.file
+import java.time.Instant
 
 class ScanFilesThread(
     private val worker: WorkerThread,
-    private val modules: List<Module>
+    private val modules: List<Module>,
+    private val db: Database
 ) : Runnable {
     private val shouldStop = AtomicBoolean(false)
+
+    private fun isAlreadyIndexedLibrarySource(file: VirtualFile): Boolean {
+        return db.sourceFilesDb.get<String>(file.url) != null
+    }
+
+    private fun shouldIndexVirtualFile(file: VirtualFile): Boolean {
+        if (file.isDirectory) return false
+
+        val existing = db.file(file.url)
+
+        if (existing == null) {
+            // Library source files are tracked by indexSourceFile() in sourceFilesDb, not filesDb.
+            // If sourceFilesDb already has this URL, do not enqueue it again through allFiles.
+            if (isAlreadyIndexedLibrarySource(file)) return false
+            return true
+        }
+
+        val current = File(
+            path = file.url,
+            packageFqName = existing.packageFqName,
+            lastModified = Instant.ofEpochMilli(file.timeStamp),
+            modificationStamp = 0L,
+            indexed = true,
+            declarationKeys = mutableListOf()
+        )
+
+        return !File.shouldBeSkipped(existingFile = existing, newFile = current) || !existing.indexed
+    }
+
+    private fun shouldScanSourceFile(file: VirtualFile): Boolean {
+        if (file.isDirectory) return false
+
+        val existing = db.file(file.url) ?: return true
+
+        val current = File(
+            path = file.url,
+            packageFqName = existing.packageFqName,
+            lastModified = Instant.ofEpochMilli(file.timeStamp),
+            modificationStamp = 0L,
+            indexed = false,
+            declarationKeys = mutableListOf()
+        )
+
+        return !File.shouldBeSkipped(existingFile = existing, newFile = current)
+    }
 
     override fun run() {
         runBlocking {
@@ -40,6 +92,7 @@ class ScanFilesThread(
                 .flatMap { it.computeFiles(extended = true) }
                 .takeWhile { !shouldStop.get() }
                 .filter { it.extension == "kt" || it.extension == "java" }
+                .filter { shouldScanSourceFile(it) }
                 .toList()
 
             @OptIn(ExperimentalCoroutinesApi::class)
@@ -61,6 +114,7 @@ class ScanFilesThread(
                     it.computeSources()
                 }.takeWhile { !shouldStop.get() }
                 .filter { it.extension == "kt" || it.extension == "java" }
+                .filter { shouldIndexVirtualFile(it) }
                 .toList()
             info("${sources.size} sources to index, starting indexing...")
 
@@ -81,10 +135,17 @@ class ScanFilesThread(
                 .sortedByDescending { it.isSourceModule }
                 .flatMap { it.computeFiles(extended = true) }
                 .takeWhile { !shouldStop.get() }
-                .filter {
-                    if(it.url.startsWith("file://")) it.extension == "kt"
-                    else if (it.extension == "class") !ClassFileViewProvider.isInnerClass(it)
-                    else true
+                .filter { vf ->
+                    when {
+                        vf.url.startsWith("file://") ->
+                            vf.extension == "kt"
+
+                        vf.extension == "class" ->
+                            !ClassFileViewProvider.isInnerClass(vf)
+
+                        else ->
+                            false
+                    }
                 }
                 .filterNot { vf ->
                     val n = vf.name
@@ -96,9 +157,26 @@ class ScanFilesThread(
 
                 }
                 .distinctBy { it.url }
+                .filter { shouldIndexVirtualFile(it) }
                 .toList()
 
+            val remainingByExtension = allFiles
+                .groupingBy { it.extension ?: "<no-ext>" }
+                .eachCount()
+
+            val remainingByProtocol = allFiles
+                .groupingBy {
+                    when {
+                        it.url.startsWith("file://") -> "file"
+                        it.url.contains("!/") -> "archive"
+                        else -> "other"
+                    }
+                }
+                .eachCount()
+
             info("${allFiles.size} files to index, starting indexing...")
+            info("Remaining files to index by extension: $remainingByExtension")
+            info("Remaining files to index by protocol: $remainingByProtocol")
             
             @OptIn(ExperimentalCoroutinesApi::class)
             allFiles.asFlow()

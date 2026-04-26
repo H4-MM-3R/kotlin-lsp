@@ -46,7 +46,7 @@ class Index(
     private val db = Database(rootFolder)
     private val workerThreadRunner = WorkerThread(db, project, workerThreadNotifier)
     private val workerThread = Thread(workerThreadRunner, "KotlinLSP-Worker")
-    private val scanFilesThreadRunner = ScanFilesThread(workerThreadRunner, modules)
+    private val scanFilesThreadRunner = ScanFilesThread(workerThreadRunner, modules, db)
     private val scanFilesThread = Thread(scanFilesThreadRunner, "KotlinLSP-ScanFiles")
     private val openedFiles: MutableMap<String, KtFile> = ConcurrentHashMap()
 
