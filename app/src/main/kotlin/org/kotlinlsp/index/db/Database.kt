@@ -19,13 +19,16 @@ import org.kotlinlsp.index.db.adapters.get
 import org.kotlinlsp.index.db.adapters.put
 import org.rocksdb.RocksDBException
 import java.io.File
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.io.path.absolutePathString
+import kotlin.concurrent.withLock
 
 const val CURRENT_SCHEMA_VERSION = 5    // Increment on schema changes
 const val VERSION_KEY = "__version"
 
 class Database(rootFolder: String) {
     private val cachePath = getCachePath(rootFolder)
+    private val packageListLock = ReentrantLock()
     val filesDb: DatabaseAdapter
     val packagesDb: DatabaseAdapter
     val declarationsDb: DatabaseAdapter
@@ -69,6 +72,39 @@ class Database(rootFolder: String) {
         declarationsDb.close()
         sourcesDb.close()
         sourceFilesDb.close()
+    }
+
+    fun addSourceFile(packageFqName: String, fileUrl: String): Boolean = packageListLock.withLock {
+        val existing = sourcesDb.get<List<String>>(packageFqName)?.toMutableList() ?: mutableListOf()
+        if (existing.contains(fileUrl)) {
+            return@withLock false
+        }
+
+        existing.add(fileUrl)
+        sourcesDb.put(packageFqName, existing)
+        true
+    }
+
+    fun updatePackageFiles(filePath: String, previousPackageFqName: String?, packageFqName: String) {
+        packageListLock.withLock {
+            if (previousPackageFqName == packageFqName) return
+
+            if (previousPackageFqName != null) {
+                val previousFiles = packagesDb.get<List<String>>(previousPackageFqName)?.toMutableList() ?: mutableListOf()
+                previousFiles.remove(filePath)
+                if (previousFiles.isEmpty()) {
+                    packagesDb.remove(previousPackageFqName)
+                } else {
+                    packagesDb.put(previousPackageFqName, previousFiles)
+                }
+            }
+
+            val files = packagesDb.get<List<String>>(packageFqName)?.toMutableList() ?: mutableListOf()
+            if (!files.contains(filePath)) {
+                files.add(filePath)
+                packagesDb.put(packageFqName, files)
+            }
+        }
     }
 
     private fun deleteAll() {

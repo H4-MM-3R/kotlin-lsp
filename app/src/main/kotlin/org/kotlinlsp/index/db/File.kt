@@ -85,21 +85,5 @@ fun Database.setFile(file: File) {
 
     filesDb.put(file.path, dto)
 
-    if(previousPackageFqName != file.packageFqName) {
-        // Remove previous package name
-        if(previousPackageFqName != null) {
-            val files = packagesDb.get<List<String>>(previousPackageFqName)?.toMutableList() ?: mutableListOf()
-            files.remove(file.path)
-            if(files.size == 0) {
-                packagesDb.remove(previousPackageFqName)
-            } else {
-                packagesDb.put(previousPackageFqName, files)
-            }
-        }
-
-        // Add new one
-        val files = packagesDb.get<List<String>>(file.packageFqName)?.toMutableList() ?: mutableListOf()
-        files.add(file.path)
-        packagesDb.put(file.packageFqName, files)
-    }
+    updatePackageFiles(file.path, previousPackageFqName, file.packageFqName)
 }

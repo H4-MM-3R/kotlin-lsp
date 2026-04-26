@@ -32,7 +32,7 @@ interface IndexNotifier {
 class Index(
     private val modules: List<Module>,
     private val project: Project,
-    rootFolder: String,
+    val rootFolder: String,
     notifier: IndexNotifier
 ) {
     private val sourceFileScanningFinishedSignal = CountDownLatch(1)

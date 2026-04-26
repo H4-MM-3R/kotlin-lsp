@@ -26,7 +26,6 @@ fun indexSourceFile(project: Project, virtualFile: VirtualFile, db: Database){
 
     val ext = virtualFile.extension?.lowercase()
     if (ext != "kt" && ext != "java") return
-    db.sourceFilesDb.put<String>(virtualFile.url, "1")
 
     val psiFile = project.read { PsiManager.getInstance(project).findFile(virtualFile) }!!
     val packageFqName = when (psiFile) {
@@ -36,11 +35,7 @@ fun indexSourceFile(project: Project, virtualFile: VirtualFile, db: Database){
         }
         else -> return
     }
-    if (db.sourcesDb.get<List<String>>(packageFqName)?.contains(psiFile.virtualFile.url) == true) return
 
-    val existing: MutableList<String> = db.sourcesDb.get<List<String>>(packageFqName)?.toMutableList() ?: mutableListOf()
-    if (!existing.contains(psiFile.virtualFile.url)) {
-        existing.add(psiFile.virtualFile.url)
-        db.sourcesDb.put(packageFqName, existing)
-    }
+    db.addSourceFile(packageFqName, psiFile.virtualFile.url)
+    db.sourceFilesDb.put<String>(virtualFile.url, "1")
 }
