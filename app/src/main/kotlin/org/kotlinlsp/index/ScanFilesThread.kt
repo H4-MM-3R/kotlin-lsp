@@ -11,6 +11,7 @@
 package org.kotlinlsp.index
 
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.ClassFileViewProvider
 import org.kotlinlsp.analysis.modules.Module
 import org.kotlinlsp.analysis.modules.asFlatSequence
@@ -117,6 +118,8 @@ class ScanFilesThread(
             indexedJdkBinaryArtifacts.set(0)
             indexedJdkSourceArtifacts.set(0)
             indexedSourceArtifacts.set(0)
+
+            purgeMissingIndexedFiles()
 
             // Get optimal concurrency level based on our dispatcher
             val maxConcurrency = 8 // Same as CustomDispatcher.cpu max parallelism
@@ -322,6 +325,18 @@ class ScanFilesThread(
                 .collect()
 
             worker.submitCommand(Command.IndexingFinished)
+        }
+    }
+
+    private fun purgeMissingIndexedFiles() {
+        val missingFilePaths = db.getTrackedFilePaths()
+            .filter { path -> VirtualFileManager.getInstance().findFileByUrl(path) == null }
+            .toList()
+
+        missingFilePaths.forEach { db.removeFile(it) }
+
+        if (missingFilePaths.isNotEmpty()) {
+            info("Removed ${missingFilePaths.size} missing indexed files from cache")
         }
     }
 

@@ -110,6 +110,28 @@ class Database(rootFolder: String) {
         }
     }
 
+    fun removeFile(filePath: String) {
+        packageListLock.withLock {
+            val fileDto = filesDb.get<FileDto>(filePath) ?: return
+
+            val previousFiles = packagesDb.get<List<String>>(fileDto.packageFqName)?.toMutableList() ?: mutableListOf()
+            previousFiles.remove(filePath)
+            if (previousFiles.isEmpty()) {
+                packagesDb.remove(fileDto.packageFqName)
+            } else {
+                packagesDb.put(fileDto.packageFqName, previousFiles)
+            }
+
+            if (fileDto.declarationKeys.isNotEmpty()) {
+                declarationsDb.remove(fileDto.declarationKeys)
+            }
+
+            filesDb.remove(filePath)
+        }
+    }
+
+    fun getTrackedFilePaths(): Sequence<String> = filesDb.prefixSearchRaw("").map { (key, _) -> key }
+
     private fun deleteAll() {
         File(cachePath.resolve("project").absolutePathString()).deleteRecursively()
         File(cachePath.resolve("artifacts").absolutePathString()).deleteRecursively()

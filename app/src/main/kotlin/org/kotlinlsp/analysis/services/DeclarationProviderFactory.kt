@@ -168,7 +168,7 @@ class DeclarationProvider(
     private fun ktFilesForPackage(fqName: FqName): Sequence<KtFile> {
         return index.filesForPackage(fqName)
             .asSequence()
-            .map { VirtualFileManager.getInstance().findFileByUrl(it)!! }
+            .mapNotNull { VirtualFileManager.getInstance().findFileByUrl(it) }
             .filter { it in scope }
             .mapNotNull { index.getKtFile(it) }
     }
